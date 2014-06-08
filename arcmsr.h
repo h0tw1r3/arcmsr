@@ -53,9 +53,13 @@
 **
 **********************************************************************************
 */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
-	#define ARCMSR_MAX_OUTSTANDING_CMD			256
-	#define ARCMSR_MAX_FREECCB_NUM			320 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 3, 30)
+	#define ARCMSR_MAX_OUTSTANDING_CMD		256
+	#ifdef CONFIG_XEN
+		#define ARCMSR_MAX_FREECCB_NUM	160
+	#else
+		#define ARCMSR_MAX_FREECCB_NUM	320
+	#endif
 #endif
 
 #ifndef __user
@@ -117,7 +121,7 @@
 	     &pos->member != (head); 					\
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 #endif
-#if !defined(scsi_sglist) && LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
+#if !defined(scsi_sglist) && LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24)
 	#define scsi_sglist(cmd) ((struct scatterlist *)(cmd)->request_buffer)
 #endif
 #ifndef scsi_for_each_sg
@@ -125,7 +129,7 @@
 	 for (__i = 0, sg = scsi_sglist(cmd); __i < (nseg); __i++, (sg)++)
 
 #endif
-#define ARCMSR_DRIVER_VERSION		"Driver Version 1.20.0X.15.100729"
+#define ARCMSR_DRIVER_VERSION		"Driver Version 1.20.0X.15.110330"
 #define ARCMSR_SCSI_INITIATOR_ID		255
 #define ARCMSR_MAX_XFER_SECTORS		512 /* (512*512)/1024 = 0x40000(256K) */
 #define ARCMSR_MAX_XFER_SECTORS_B		4096 /* (4096*512)/1024 = 0x200000(2M) */
@@ -188,13 +192,13 @@
 	#define DMA_BIT_MASK(n)	(((n) == 64) ? ~0ULL : ((1ULL<<(n))-1))
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,10)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 3, 10)
 	#define arcget_pcicfg_base(pdev,n)	pci_resource_start(pdev,n)
 #else
 	#define arcget_pcicfg_base(pdev,n)	pdev->base_address[n] & PCI_BASE_ADDRESS_MEM_MASK
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,30)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 3, 30)
 
 	#if (BITS_PER_LONG == 64)
 		 typedef u64 dma_addr_t;
@@ -215,7 +219,7 @@
 	#define pci_unmap_single(cookie, address, size, dir)
 #endif
 
-#if LINUX_VERSION_CODE >=KERNEL_VERSION(2,6,9)
+#if LINUX_VERSION_CODE >=KERNEL_VERSION(2, 6, 9)
 	#define arc_mdelay(msec)	msleep(msec)
 	#define arc_mdelay_int(msec)	msleep_interruptible(msec)
 #else
@@ -231,7 +235,7 @@
 	#define SA_SHIRQ	IRQF_SHARED
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 	#define SPIN_LOCK_IRQ_CHK(acb)
 	#define SPIN_UNLOCK_IRQ_CHK(acb)
 #else
@@ -241,6 +245,14 @@
 
 #ifndef roundup
 	#define roundup(x, y)   ((((x)+((y)-1))/(y))*(y))
+#endif
+
+#if !defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 33) 
+	enum {
+		SCSI_QDEPTH_DEFAULT,	/* default requested change, e.g. from sysfs */
+		SCSI_QDEPTH_QFULL,	/* scsi-ml requested due to queue full */
+		SCSI_QDEPTH_RAMP_UP,	/* scsi-ml requested due to threshhold event */
+	};
 #endif
 /*
 **********************************************************************************
@@ -671,7 +683,7 @@ struct MessageUnit_C{
 	uint32_t	msgcode_rwbuffer[256];			/*2200 23FF*/
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0)
 	/*
 	************************************************************************************************
 	************************************************************************************************
@@ -908,7 +920,7 @@ struct AdapterControlBlock
 	int32_t					wqbuf_firstindex;                  		/* first of write buffer */
 	int32_t                         			wqbuf_lastindex;                   		/* last of write buffer  */
 
-	#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 5, 0)
 		spinlock_t                      		isr_lock;
 	#endif
 
@@ -926,7 +938,7 @@ struct AdapterControlBlock
 	char                            			firm_model[12];			/*15,60-67*/
 	char                            			firm_version[20];			/*17,68-83*/
 	char					device_map[20];			/*21,84-99*/
-	#if (ARCMSR_FW_POLLING && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+	#if (ARCMSR_FW_POLLING && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
 		struct work_struct 		arcmsr_do_message_isr_bh;
 		struct timer_list			eternal_timer;
 		unsigned short			fw_flag;
@@ -5055,11 +5067,15 @@ struct SENSE_DATA
 **************************************************************************
 */
 extern int arcmsr_release(struct Scsi_Host *);
-extern int arcmsr_queue_command(struct scsi_cmnd *cmd,void (* done)(struct scsi_cmnd *cmd));
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
+	extern int arcmsr_queue_command(struct Scsi_Host *h, struct scsi_cmnd *cmd);
+#else
+	extern int arcmsr_queue_command(struct scsi_cmnd *cmd, void (* done)(struct scsi_cmnd *));
+#endif
 extern int arcmsr_abort(struct scsi_cmnd *cmd);
 extern int arcmsr_bus_reset(struct scsi_cmnd *cmd);
 extern const char *arcmsr_info(struct Scsi_Host *);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 5, 0)
 	#define   arcmsr_detect NULL
 	extern int arcmsr_proc_info(struct Scsi_Host *host, char *buffer, char **start, off_t offset, int length, int inout);
 	extern int arcmsr_bios_param(struct scsi_device *sdev, struct block_device *bdev, sector_t capacity, int *info);
@@ -5067,7 +5083,7 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 *******************************************************************************
 *******************************************************************************
 */
-	#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
 		static ssize_t arcmsr_show_firmware_info(struct class_device *dev, char *buf)
 		{
 			struct Scsi_Host *host = class_to_shost(dev);
@@ -5165,8 +5181,8 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 *******************************************************************************
 *******************************************************************************
 */
-	#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
-		static int arcmsr_adjust_disk_queue_depth(struct scsi_device *sdev, int queue_depth, int reason)
+	#if defined(RHEL_RELEASE_CODE) && LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 31)
+		int arcmsr_adjust_disk_queue_depth(struct scsi_device *sdev, int queue_depth, int reason)
 		{
 			if (reason != SCSI_QDEPTH_DEFAULT)
 				return -EOPNOTSUPP;
@@ -5176,7 +5192,18 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 			scsi_adjust_queue_depth(sdev, MSG_ORDERED_TAG, queue_depth);
 			return queue_depth;
 		}
-	#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+	#elif LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 32)
+		int arcmsr_adjust_disk_queue_depth(struct scsi_device *sdev, int queue_depth, int reason)
+		{
+			if (reason != SCSI_QDEPTH_DEFAULT)
+				return -EOPNOTSUPP;
+			if(queue_depth > ARCMSR_MAX_CMD_PERLUN)	{
+				queue_depth = ARCMSR_MAX_CMD_PERLUN;
+			}
+			scsi_adjust_queue_depth(sdev, MSG_ORDERED_TAG, queue_depth);
+			return queue_depth;
+		}
+	#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 11)
 		static int arcmsr_adjust_disk_queue_depth(struct scsi_device *sdev, int queue_depth)
 		{
 			if(queue_depth > ARCMSR_MAX_CMD_PERLUN)	{
@@ -5216,13 +5243,13 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 *******************************************************************************
 */
 	static struct scsi_host_template arcmsr_scsi_host_template = {
-		.module                 		= THIS_MODULE,
+		.module                 			= THIS_MODULE,
 		.proc_name			= "arcmsr",
-    		.proc_info			= arcmsr_proc_info,
+    		.proc_info				= arcmsr_proc_info,
     		.name		            		= "ARCMSR ARECA SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
     		.release	            			= arcmsr_release,
 		.info                   			= arcmsr_info,
-    		.queuecommand			= arcmsr_queue_command,
+		.queuecommand			= arcmsr_queue_command,
 		.eh_abort_handler			= arcmsr_abort,
 		.eh_device_reset_handler		= NULL,	
 		.eh_bus_reset_handler   		= arcmsr_bus_reset,
@@ -5235,16 +5262,16 @@ extern const char *arcmsr_info(struct Scsi_Host *);
     		.cmd_per_lun	        		= ARCMSR_MAX_CMD_PERLUN,	
      		.unchecked_isa_dma      		= 0,
 		.use_clustering	        		= ENABLE_CLUSTERING,
-		#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+		#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 26)
 			.shost_attrs		    	= arcmsr_scsi_host_attr,
 		#endif
-		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 11)
 			.change_queue_depth	= arcmsr_adjust_disk_queue_depth,
 		#else
 			.sdev_attrs		= arcmsr_scsi_device_attr,
 		#endif
 	};
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 3, 30)
 	extern int arcmsr_detect(Scsi_Host_Template *);
 	extern int arcmsr_schedule_command(struct scsi_cmnd *  pcmd);
 	extern int arcmsr_proc_info(char * buffer, char ** start, off_t offset, int length, int hostno, int inout);

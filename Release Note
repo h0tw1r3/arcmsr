@@ -106,4 +106,12 @@ Release Note :
 						If the sg list entry is larget than 127, it will allocate the rest of entries in the other sg list on other page.
 						The old for-loop type could hit the bugs if the second sg list is not ine the subsequent page.
 05/10/2010	1.20.0X.15
-						1. support ARC-1880 series on kernel 2.6.X			
+						1. support ARC-1880 series on kernel 2.6.X
+07/27/2010	1.20.0X.15
+						1. fix the system lock-up on Intel Xeon 55XX series, x86_64
+07/29/2010	1.20.0X.15
+						1. revise the codes for scatter-gather applicable to RHEL5.0 to RHEL5.3
+10/08/2010	1.20.0X.15			
+						1. fix DMA memory allocation failure in Xen
+						2. use command->sc_data_direction instead of trying (incorrectly) to figure it out from the command itself in
+03/11/2011	1.20.0X.15	1. increase the timeout value for every kind of scsi commands during driver modules installation if needed it
