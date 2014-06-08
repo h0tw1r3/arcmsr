@@ -74,10 +74,18 @@
 **                                                       thanks Kornel Wieliczek give me kindly notify and detail description
 **     1.20.0X.13   11/15/2005         Erich Chen        scheduling pending ccb with 'first in first out'
 **                                                       new firmware update notify
+**                  11/07/2006         Erich Chen        1.remove #include config.h and devfs_fs_kernel.h
+**                                                       2.enlarge the timeout duration of each scsi command 
+**                                                         it could aviod the vibration factor 
+**                                                         with sata disk on some bad machine 
 *********************************************************************************************
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-       Thanks to Tamas TEVESZ <ice@extreme.hu> kindness comment for Out-of-tree build
+       Thanks to: 
+                 Tamas TEVESZ <ice@extreme.hu> kindness comment for 
+                       Out-of-tree build
+                 Doug Goldstein <doug@monetra.com> kindness comment for 
+                       Kconfig.arcmsr file create
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 There are two ways to build the arcmsr driver.
@@ -87,7 +95,7 @@ There are two ways to build the arcmsr driver.
 
 Copy the `arcmsr' directory to $KSRC/drivers/scsi, then manually edit the
 following two files to add the options necessary to build the driver:
-
+--------------------------------------------------------------------------------------------
 Add the following line to $KSRC/drivers/scsi/Makefile:
 
 obj-$(CONFIG_SCSI_ARCMSR)       += arcmsr/
@@ -95,34 +103,11 @@ obj-$(CONFIG_SCSI_ARCMSR)       += arcmsr/
 --------------------------------------------------------------------------------------------
 Add the following block to $KSRC/drivers/scsi/Kconfig:
 
-config SCSI_ARCMSR
-	tristate "ARECA ARC11X0[PCI-X]/ARC12X0[PCI-EXPRESS] SATA-RAID support"
-	depends on  PCI && SCSI
-	help
-	  This driver supports all of ARECA's SATA RAID controllers cards.
-	  This is an ARECA maintained driver by Erich Chen. If you have any
-	  problems, please mail to <erich@areca.com.tw>.
-	  Areca suports its Linux RAID Management Tools
-	  Please contact < http://www.areca.com.tw >
-			 <  ftp://ftp.areca.com.tw >
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called arcmsr.
-
-config SCSI_ARCMSR_MSI
-	bool "Use PCI message signal interrupt"
-	depends on PCI_MSI && SCSI_ARCMSR
-	default n
-	help
-	  If you say Y here.  You will enable PCI Message signaled Interrupts
-	  function, but some machines may have problems.  If you get
-	  abort command on driver initialize, you have to answer Y here.
-	  If the IRQ problem even worse,
-	  please report the problem to the maintainer.
+source "drivers/scsi/arcmsr/Kconfig.arcmsr"
 
 --------------------------------------------------------------------------------------------
 Now configure and build your kernel as you usually do, paying attention to
-select the Device Drivers -> SCSI device support -> SCSI low-level drivers -> ARECA SATA RAID Host Controller option.
+select the Device Drivers -> SCSI device support -> SCSI low-level drivers -> ARECA SATA/SAS RAID Host Controller option.
 
 2. Out-of-tree build
 ====================

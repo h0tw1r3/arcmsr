@@ -1,0 +1,23 @@
+config SCSI_ARCMSR
+	tristate "ARECA ARC11X0[PCI-X]/ARC12X0[PCI-EXPRESS] SATA-RAID support"
+	depends on  PCI && SCSI
+	help
+	  This driver supports all of ARECA's SATA RAID controllers cards.
+	  This is an ARECA maintained driver by Erich Chen. If you have any
+	  problems, please mail to <erich@areca.com.tw>.
+	  Areca suports its Linux RAID Management Tools
+	  Please contact < http://www.areca.com.tw >
+			 <  ftp://ftp.areca.com.tw >
+	  To compile this driver as a module, choose M here: the
+	  module will be called arcmsr.
+
+config SCSI_ARCMSR_MSI
+	bool "Use PCI message signal interrupt"
+	depends on PCI_MSI && SCSI_ARCMSR
+	default n
+	help
+	  If you say Y here.  You will enable PCI Message signaled Interrupts
+	  function, but some machines may have problems.  If you get
+	  abort command on driver initialize, you have to answer Y here.
+	  If the IRQ problem even worse,
+	  please report the problem to the maintainer.

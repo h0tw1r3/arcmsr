@@ -42,7 +42,6 @@
 ** THIS SOFTWARE,EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **************************************************************************
 */
-#include <linux/config.h>
 #include <linux/version.h>
 #ifndef KERNEL_VERSION
     #define KERNEL_VERSION(V, P, S)	(((V) << 16) + ((P) << 8) + (S))
@@ -68,15 +67,16 @@
 #ifndef __iomem
    #define __iomem          
 #endif
-#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.0X.13"
+#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.0X.13 2006/11/07"
 #define ARCMSR_SCSI_INITIATOR_ID                                              255
-#define ARCMSR_MAX_XFER_SECTORS                                               512
+#define ARCMSR_MAX_XFER_SECTORS                                               512 /* (512*512) / 1024 = 0x0040000 (256K) */
 #define ARCMSR_MAX_TARGETID                                                    17 /*17 max target id + 1*/
 #define ARCMSR_MAX_TARGETLUN                                                    8 /*8*/
 #define ARCMSR_MAX_CMD_PERLUN                          ARCMSR_MAX_OUTSTANDING_CMD /* ARCMSR_MAX_FREECCB_NUM  if eq. 256 will kernel panic at 2.2.x */
 #define ARCMSR_MAX_QBUFFER                                                   4096 /* ioctl QBUFFER */
 #define ARCMSR_MAX_SG_ENTRIES                                                  38 /* max 38*/
 #define ARCMSR_MAX_ADAPTER                                                      4
+#define ARCMSR_SD_TIMEOUT                                                 (90*HZ)
 /*
 **********************************************************************************
 **
@@ -645,7 +645,7 @@ struct AdapterControlBlock
 #define ACB_F_IOP_INITED              0x0100                    		/* iop init */
 #define ACB_F_HAVE_MSI                0x0200   
 
-    struct CommandControlBlock *                    pccb_pool[ARCMSR_MAX_FREECCB_NUM];      /* used for memory free */
+    struct CommandControlBlock *    pccb_pool[ARCMSR_MAX_FREECCB_NUM];      /* used for memory free */
 	struct list_head                ccb_free_list;		                    /* head of free ccb list */
     atomic_t                        ccboutstandingcount;
 
@@ -695,25 +695,25 @@ struct HCBARC
 *************************************************************
 *************************************************************
 */
+#define SCSI_SENSE_CURRENT_ERRORS	0x70
+#define SCSI_SENSE_DEFERRED_ERRORS	0x71
 struct SENSE_DATA 
 {
     uint8_t ErrorCode:7;
-#define SCSI_SENSE_CURRENT_ERRORS	0x70
-#define SCSI_SENSE_DEFERRED_ERRORS	0x71
-    uint8_t Valid:1;
-    uint8_t SegmentNumber;
+    uint8_t Valid:1;/* 0 */
+    uint8_t SegmentNumber;/* 1 */
     uint8_t SenseKey:4;
     uint8_t Reserved:1;
     uint8_t IncorrectLength:1;
     uint8_t EndOfMedia:1;
-    uint8_t FileMark:1;
-    uint8_t Information[4];
-    uint8_t AdditionalSenseLength;
-    uint8_t CommandSpecificInformation[4];
-    uint8_t AdditionalSenseCode;
-    uint8_t AdditionalSenseCodeQualifier;
-    uint8_t FieldReplaceableUnitCode;
-    uint8_t SenseKeySpecific[3];
+    uint8_t FileMark:1;/* 2 */
+    uint8_t Information[4];/* 3 4 5 6 */
+    uint8_t AdditionalSenseLength;/* 7 */
+    uint8_t CommandSpecificInformation[4];/* 8 9 10 11 */
+    uint8_t AdditionalSenseCode;/* 12 */
+    uint8_t AdditionalSenseCodeQualifier;/* 13 */
+    uint8_t FieldReplaceableUnitCode;/* 14 */
+    uint8_t SenseKeySpecific[3]; /* 15 16 17 */
 };
 /* 
 **********************************
