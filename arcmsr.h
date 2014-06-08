@@ -67,7 +67,7 @@
 #ifndef __iomem
    #define __iomem          
 #endif
-#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.0X.14"
+#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.0X.14 2007/08/27"
 #define ARCMSR_SCSI_INITIATOR_ID                                              255
 #define ARCMSR_MAX_XFER_SECTORS                                               512 /* (512*512) / 1024 = 0x0040000 (256K) */
 #define ARCMSR_MAX_XFER_SECTORS_B                                            4096 /* (4096*512) / 1024 = 0x0100000 (1M) */

@@ -87,6 +87,8 @@
 **											                  5.modify the ISR, arcmsr_interrupt routine, to prevent the inconsistent with sg_mod driver if application directly calls the arcmsr driver 
 **											                  w/o passing through  scsi mid layer		
 **												       6.delect the callback function, arcmsr_ioctl
+**   1.20.0X.14        08/27/2007	Erich Chen/Nick Cheng		    1. modify orig_mask readl(&reg->outbound_intmask)|ARCMSR_MU_OUTBOUND_MESSAGE0_INTMASKENABLE in arcmsr_disable_allintr()
+**											    2. delect the "results " from pci_enable_pcie_error_reporting(pdev) in arcmsr_probe() 
 ******************************************************************************************
 */
 #define	ARCMSR_DEBUG	0			  
@@ -160,7 +162,8 @@
 #endif
 
 MODULE_AUTHOR("Erich Chen <erich@areca.com.tw>");
-MODULE_DESCRIPTION("ARECA (ARC11xx/12xx/13xx/16xx) SATA RAID HOST Adapter");
+MODULE_VERSION(ARCMSR_DRIVER_VERSION);
+MODULE_DESCRIPTION("ARECA (ARC11xx/12xx/13xx/16xx) SATA/SAS RAID HOST Adapter");
 
 #ifdef MODULE_LICENSE
 MODULE_LICENSE("Dual BSD/GPL");
@@ -381,7 +384,7 @@ static void arcmsr_done4_abort_postqueue(struct AdapterControlBlock *acb);
 			printk("ARECA RAID ADAPTER%d: No 32BIT coherent	DMA adressing available.\n",arcmsr_adapterCnt);
 			return -ENOMEM;
 		}
-            
+
 		bus = pdev->bus->number;
 	        dev_fun = pdev->devfn;
 		acb=(struct AdapterControlBlock	*) host->hostdata;
@@ -445,7 +448,7 @@ static void arcmsr_done4_abort_postqueue(struct AdapterControlBlock *acb);
 	    	scsi_scan_host(host);
 		
 		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,19)
-			results=pci_enable_pcie_error_reporting(pdev);
+			pci_enable_pcie_error_reporting(pdev);
 	    	#endif
 		return 0;
 	}
@@ -702,9 +705,9 @@ static void arcmsr_done4_abort_postqueue(struct AdapterControlBlock *acb);
 				acb->pdev=pdev;
 				acb->host=host;
 			#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,7)
+				host->max_sectors=ARCMSR_MAX_XFER_SECTORS;
 				if(strncmp(acb->firm_version,"V1.42",5) >= 0)
                                 host->max_sectors=ARCMSR_MAX_XFER_SECTORS_B;
-                                host->max_sectors=ARCMSR_MAX_XFER_SECTORS;
 			#endif
 				host->max_lun=ARCMSR_MAX_TARGETLUN;
 				host->max_id=ARCMSR_MAX_TARGETID;/*16:8*/
@@ -809,7 +812,7 @@ static void arcmsr_done4_abort_postqueue(struct AdapterControlBlock *acb);
 static u32 arcmsr_disable_allintr(struct AdapterControlBlock *acb)
 {
 	struct MessageUnit __iomem *reg	= acb->pmu;
-	u32 orig_mask =	readl(&reg->outbound_intmask);
+	u32 orig_mask =	readl(&reg->outbound_intmask)|ARCMSR_MU_OUTBOUND_MESSAGE0_INTMASKENABLE;
 	
 	writel(orig_mask | ARCMSR_MU_OUTBOUND_ALL_INTMASKENABLE,
 			&reg->outbound_intmask);
@@ -2165,7 +2168,7 @@ int arcmsr_abort(struct	scsi_cmnd *cmd)
 	if(acb->dev_aborts[id][lun]>1)
 	{
 		acb->devstate[id][lun] = ARECA_RAID_GONE;
-		return FAILED;
+		return SUCCESS;
 	}
 	/*
 	************************************************
@@ -2298,7 +2301,7 @@ static int arcmsr_initialize(struct AdapterControlBlock *acb,struct pci_dev *pde
 	{
 		for(j=0;j<ARCMSR_MAX_TARGETLUN;j++)
 		{
-			acb->devstate[i][j]=ARECA_RAID_GOOD;
+			acb->devstate[i][j]=ARECA_RAID_GONE;
 		}
 	}
 	reg = acb->pmu;
