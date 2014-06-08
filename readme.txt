@@ -16,7 +16,6 @@ Web site: www.areca.com.tw
 	2. arcmsr.c	- driver source file for kernel 2.6.X
 	3. arcmsr.h	- driver source file for kernel 2.6.X
 	4. Makefile	- Makefile for kernel 2.6.X
-	5. release note	- change log
 **********************************************************************************
 ** 2. Compile and install arcmsr RAID driver on the running system		**
 **********************************************************************************

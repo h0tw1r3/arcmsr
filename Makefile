@@ -34,6 +34,7 @@ endif
 MODULE_NAME = arcmsr
 INSTALL_DIR := /lib/modules/$(shell uname -r)/extra
 obj-m := arcmsr.o
+//EXTRA_CFLAGS += -DSUPPORT_MSI
 EXTRA_CFLAGS += -g
 
 all: 
