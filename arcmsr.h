@@ -125,16 +125,16 @@
 	 for (__i = 0, sg = scsi_sglist(cmd); __i < (nseg); __i++, (sg)++)
 
 #endif
-#define ARCMSR_DRIVER_VERSION			"Driver Version 1.20.0X.15.100510"
+#define ARCMSR_DRIVER_VERSION		"Driver Version 1.20.0X.15.100729"
 #define ARCMSR_SCSI_INITIATOR_ID		255
 #define ARCMSR_MAX_XFER_SECTORS		512 /* (512*512)/1024 = 0x40000(256K) */
 #define ARCMSR_MAX_XFER_SECTORS_B		4096 /* (4096*512)/1024 = 0x200000(2M) */
 #define ARCMSR_MAX_XFER_SECTORS_C		304 /* (304*512)= 155648(=0x26000)*/
 #define ARCMSR_MAX_TARGETID			17 /*17 max target id + 1*/
 #define ARCMSR_MAX_TARGETLUN			8 /*8*/
-#define ARCMSR_MAX_CMD_PERLUN			ARCMSR_MAX_OUTSTANDING_CMD /* ARCMSR_MAX_FREECCB_NUM  if eq. 256 will kernel panic at 2.2.x */
+#define ARCMSR_MAX_CMD_PERLUN		ARCMSR_MAX_OUTSTANDING_CMD /* ARCMSR_MAX_FREECCB_NUM  if eq. 256 will kernel panic at 2.2.x */
 #define ARCMSR_MAX_QBUFFER			4096 /* ioctl QBUFFER */
-#define ARCMSR_DEFAULT_SG_ENTRIES		37 /* max 38*/
+#define ARCMSR_DEFAULT_SG_ENTRIES		38 /* max 38*/
 #define ARCMSR_MAX_HBB_POSTQUEUE		264
 #define ARCMSR_MAX_ADAPTER			4
 #define ARCMSR_SD_TIMEOUT			90
@@ -506,7 +506,7 @@ struct FIRMWARE_INFO
 /* Host Interrupt Mask */
 #define ARCMSR_HBCMU_UTILITY_A_ISR_MASK				0x00000001 /* When clear, the Utility_A interrupt routes to the host.*/
 #define ARCMSR_HBCMU_OUTBOUND_DOORBELL_ISR_MASK			0x00000004 /* When clear, the General Outbound Doorbell interrupt routes to the host.*/
-#define ARCMSR_HBCMU_OUTBOUND_POSTQUEUE_ISR_MASK			0x00000008 /* When clear, the Outbound Post List FIFO Not Empty interrupt routes to the host.*/
+#define ARCMSR_HBCMU_OUTBOUND_POSTQUEUE_ISR_MASK		0x00000008 /* When clear, the Outbound Post List FIFO Not Empty interrupt routes to the host.*/
 #define ARCMSR_HBCMU_ALL_INTMASKENABLE				0x0000000D /* disable all ISR */
 /* Host Interrupt Status */
 #define ARCMSR_HBCMU_UTILITY_A_ISR					0x00000001
@@ -514,7 +514,7 @@ struct FIRMWARE_INFO
 	** Set when the Utility_A Interrupt bit is set in the Outbound Doorbell Register.
 	** It clears by writing a 1 to the Utility_A bit in the Outbound Doorbell Clear Register or through automatic clearing (if enabled).
 	*/
-#define ARCMSR_HBCMU_OUTBOUND_DOORBELL_ISR				0x00000004
+#define ARCMSR_HBCMU_OUTBOUND_DOORBELL_ISR			0x00000004
 	/*
 	** Set if Outbound Doorbell register bits 30:1 have a non-zero
 	** value. This bit clears only when Outbound Doorbell bits
@@ -533,13 +533,13 @@ struct FIRMWARE_INFO
 	** the PCIe core. This bit is not maskable.
 	*/
 /* DoorBell*/
-#define ARCMSR_HBCMU_DRV2IOP_DATA_WRITE_OK				0x00000002
+#define ARCMSR_HBCMU_DRV2IOP_DATA_WRITE_OK			0x00000002
 #define ARCMSR_HBCMU_DRV2IOP_DATA_READ_OK				0x00000004
 /*inbound message 0 ready*/
 #define ARCMSR_HBCMU_DRV2IOP_MESSAGE_CMD_DONE			0x00000008
 /*more than 12 request completed in a time*/
-#define ARCMSR_HBCMU_DRV2IOP_POSTQUEUE_THROTTLING			0x00000010
-#define ARCMSR_HBCMU_IOP2DRV_DATA_WRITE_OK				0x00000002
+#define ARCMSR_HBCMU_DRV2IOP_POSTQUEUE_THROTTLING		0x00000010
+#define ARCMSR_HBCMU_IOP2DRV_DATA_WRITE_OK			0x00000002
 /*outbound DATA WRITE isr door bell clear*/
 #define ARCMSR_HBCMU_IOP2DRV_DATA_WRITE_DOORBELL_CLEAR		0x00000002
 #define ARCMSR_HBCMU_IOP2DRV_DATA_READ_OK				0x00000004
@@ -552,7 +552,7 @@ struct FIRMWARE_INFO
 /*ARCMSR_HBAMU_MESSAGE_FIRMWARE_OK*/
 #define ARCMSR_HBCMU_MESSAGE_FIRMWARE_OK				0x80000000
 /* ARC-1880 Bus Reset*/
-#define ARCMSR_ARC1880_RESET_ADAPTER					0x00000024
+#define ARCMSR_ARC1880_RESET_ADAPTER				0x00000024
 #define ARCMSR_ARC1880_DiagWrite_ENABLE				0x00000080
 /*
 *******************************************************************************
@@ -5165,11 +5165,21 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 *******************************************************************************
 *******************************************************************************
 */
-	#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+	#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
+		static int arcmsr_adjust_disk_queue_depth(struct scsi_device *sdev, int queue_depth, int reason)
+		{
+			if (reason != SCSI_QDEPTH_DEFAULT)
+				return -EOPNOTSUPP;
+			if(queue_depth > ARCMSR_MAX_CMD_PERLUN)	{
+				queue_depth = ARCMSR_MAX_CMD_PERLUN;
+			}
+			scsi_adjust_queue_depth(sdev, MSG_ORDERED_TAG, queue_depth);
+			return queue_depth;
+		}
+	#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
 		static int arcmsr_adjust_disk_queue_depth(struct scsi_device *sdev, int queue_depth)
 		{
-			if(queue_depth > ARCMSR_MAX_CMD_PERLUN)
-			{
+			if(queue_depth > ARCMSR_MAX_CMD_PERLUN)	{
 				queue_depth = ARCMSR_MAX_CMD_PERLUN;
 			}
 			scsi_adjust_queue_depth(sdev, MSG_ORDERED_TAG, queue_depth);
@@ -5229,7 +5239,7 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 			.shost_attrs		    	= arcmsr_scsi_host_attr,
 		#endif
 		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
-			.change_queue_depth	=arcmsr_adjust_disk_queue_depth,
+			.change_queue_depth	= arcmsr_adjust_disk_queue_depth,
 		#else
 			.sdev_attrs		= arcmsr_scsi_device_attr,
 		#endif
