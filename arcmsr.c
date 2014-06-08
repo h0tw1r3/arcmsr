@@ -164,6 +164,8 @@
 **								figure it out from the command itself in arcsas_build_ccb()
 ** 1.20.0X.15	03/30/2011	Nick Cheng			1. increase the timeout value for every kind of scsi commands during driver modules installation if needed it
 ** 1.20.0X.15	06/22/2011	Nick Cheng			1. change debug print
+** 1.20.0X.15	08/30/2011	Nick Cheng			1. fix the bug of recovery from hibernation
+** 1.20.0X.15	10/12/2011	Nick Cheng			1. fix some syntax error
 ******************************************************************************************
 */
 #define ARCMSR_DEBUG_EXTDFW		0
@@ -291,6 +293,10 @@ static void arcmsr_enable_outbound_ints(struct AdapterControlBlock *acb, u32 ori
 	#define	arcmsr_detect NULL
     	static irqreturn_t arcmsr_interrupt(struct AdapterControlBlock *acb);
     	static int arcmsr_probe(struct pci_dev *pdev,const struct pci_device_id *id);
+	#ifdef CONFIG_PM
+	static int arcmsr_suspend(struct pci_dev *pdev, pm_message_t state);
+	static int arcmsr_resume(struct pci_dev *pdev);
+	#endif
 	static void arcmsr_remove(struct pci_dev *pdev);
 	#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
 		static void arcmsr_shutdown(struct pci_dev *pdev);
@@ -578,13 +584,25 @@ static void arcmsr_touch_nmi_watchdog(void)
 		{0, 0},	/* Terminating entry */
 	};
 	MODULE_DEVICE_TABLE(pci, arcmsr_device_id_table);
+	/*
+	*********************************************************************
+	*********************************************************************
+	*/
+	/*
+	*********************************************************************
+	*********************************************************************
+	*/
 	struct pci_driver arcmsr_pci_driver = 
 	{
 		.name		      				= "arcmsr",
 		.id_table						= arcmsr_device_id_table,
 		.probe		      				= arcmsr_probe,
 		.remove	     	      				= arcmsr_remove,
-        		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
+		#ifdef CONFIG_PM
+			.suspend					= arcmsr_suspend,
+			.resume					= arcmsr_resume,
+		#endif
+		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 13)
 	    		.shutdown				= arcmsr_shutdown,
 	    	#endif
 	};
@@ -942,6 +960,94 @@ static void arcmsr_touch_nmi_watchdog(void)
 		geom[2] = cylinders;
 		return 0;
 	}
+	#ifdef CONFIG_PM
+		static int arcmsr_suspend(struct pci_dev *pdev, pm_message_t state)
+		{
+			struct Scsi_Host *host = pci_get_drvdata(pdev);
+			struct AdapterControlBlock *acb = (struct AdapterControlBlock *)host->hostdata;
+
+			#if ARCMSR_DEBUG_FUNCTION
+				printk("%s:\n", __func__);
+			#endif
+			arcmsr_disable_outbound_ints(acb);
+			#if (ARCMSR_FW_POLLING && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
+				del_timer_sync(&acb->eternal_timer);
+				flush_scheduled_work();
+			#endif
+			arcmsr_stop_adapter_bgrb(acb);
+			arcmsr_flush_adapter_cache(acb);
+			free_irq(pdev->irq, acb);
+			pci_set_drvdata(pdev, host);
+			pci_save_state(pdev);
+			pci_disable_device(pdev);
+			pci_set_power_state(pdev, pci_choose_state(pdev, state));
+			return 0;
+		}
+		/*
+		*********************************************************************
+		*********************************************************************
+		*/
+		static int arcmsr_resume(struct pci_dev *pdev)
+		{
+			int error;
+			struct Scsi_Host *host = pci_get_drvdata(pdev);
+			struct AdapterControlBlock *acb = (struct AdapterControlBlock *)host->hostdata;
+			#if ARCMSR_DEBUG_FUNCTION
+				printk("%s:\n", __func__);
+			#endif
+			pci_set_power_state(pdev, PCI_D0);
+			pci_enable_wake(pdev, PCI_D0, 0);
+			pci_restore_state(pdev);
+			if (pci_enable_device(pdev)) {
+				printk("%s: pci_enable_device error \n", __func__);
+				return -ENODEV;
+			}
+			error = pci_set_dma_mask(pdev, DMA_BIT_MASK(64));
+			if (error) {
+				error = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
+				if (error) {
+					printk(KERN_WARNING
+					       "scsi%d: No suitable DMA mask available\n",
+					       host->host_no);
+					goto controller_unregister;
+				}
+			}
+			pci_set_master(pdev);
+			arcmsr_iop_init(acb);
+			if (request_irq(pdev->irq, arcmsr_do_interrupt, SA_INTERRUPT | SA_SHIRQ, "arcmsr", acb)) {
+				printk("%s: request_irq =%d failed!\n", __func__, pdev->irq);
+				goto controller_stop;
+			}
+			#if (ARCMSR_FW_POLLING && LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 0))
+				#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 20)
+					INIT_WORK(&acb->arcmsr_do_message_isr_bh, arcmsr_message_isr_bh_fn);
+				#else
+					INIT_WORK(&acb->arcmsr_do_message_isr_bh, arcmsr_message_isr_bh_fn, acb);
+				#endif
+				atomic_set(&acb->rq_map_token, 16);
+				atomic_set(&acb->ante_token_value, 16);
+				acb->fw_flag = FW_NORMAL;
+				init_timer(&acb->eternal_timer);
+				acb->eternal_timer.expires = jiffies + msecs_to_jiffies(6 * HZ);
+				acb->eternal_timer.data = (unsigned long) acb;
+				acb->eternal_timer.function = &arcmsr_request_device_map;
+				add_timer(&acb->eternal_timer);
+			#endif
+			return 0;
+			controller_stop:
+				arcmsr_stop_adapter_bgrb(acb);
+				arcmsr_flush_adapter_cache(acb);
+			controller_unregister:
+				scsi_remove_host(host);
+				arcmsr_free_ccb_pool(acb);
+				arcmsr_unmap_pciregion(acb);
+				pci_release_regions(pdev);
+				scsi_host_put(host);	
+				pci_disable_device(pdev);
+			return -ENODEV;
+		}
+	#endif
+
 	/*
 	************************************************************************
 	************************************************************************
@@ -1501,7 +1607,8 @@ static void arcmsr_touch_nmi_watchdog(void)
 			}
 			break;
 		case 0x1200:
-		case 0x1201: {
+		case 0x1201:
+		case 0x1202: {
 			printk("Found ARC-%x\n", dev_id);
 			acb->adapter_type = ACB_ADAPTER_TYPE_B;
 			}
@@ -1949,7 +2056,7 @@ static int arcmsr_build_ccb(struct AdapterControlBlock *acb, struct CommandContr
 	}
 	ccb->arc_cdb_size = arccdbsize;
 	if (timeout) {
-		#if LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 27)
+		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)
 			temp = pcmd->request->timeout / HZ;//timeout value in struct request is in jiffy
 			pcmd->request->deadline = jiffies + timeout * HZ;
 			if (pcmd->device->request_queue->timeout.function) {

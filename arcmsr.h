@@ -129,7 +129,7 @@
 	 for (__i = 0, sg = scsi_sglist(cmd); __i < (nseg); __i++, (sg)++)
 
 #endif
-#define ARCMSR_DRIVER_VERSION		"Driver Version 1.20.0X.15.110622"
+#define ARCMSR_DRIVER_VERSION		"Driver Version 1.20.0X.15.111012"
 #define ARCMSR_SCSI_INITIATOR_ID		255
 #define ARCMSR_MAX_XFER_SECTORS		512 /* (512*512)/1024 = 0x40000(256K) */
 #define ARCMSR_MAX_XFER_SECTORS_B		4096 /* (4096*512)/1024 = 0x200000(2M) */
