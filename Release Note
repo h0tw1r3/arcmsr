@@ -8,7 +8,7 @@ Release Note :
 						1.cleanly as look like a Linux driver at 2.6.x
 06/23/2005	1.20.0X.08	
 						1.bug fix with abort command,in case of heavy loading when sata cable working on low quality connection
-			1.20.00.08	
+	    	1.20.00.08	
 						1.for linux kernel 2.6.x only
 9/12/2005	1.20.0X.09	
 						1.bug fix with abort command handling,and firmware version check 
@@ -100,4 +100,10 @@ Release Note :
 06/02/2009	1.20.0X.15
 						1. fix cli access unavailably issue on ARC-1200/1201 while a certain HD is unstable
 06/05/2009	1.20.0X.15
-						1. suport the maximum transfer size to 16M 				
+						1. suport the maximum transfer size to 16M
+12/09/2009	1.20.0X.15
+						1. change the "for loop" for manipulating sg list to scsi_for_each_sg. There is 127 entries per sg list. 
+						If the sg list entry is larget than 127, it will allocate the rest of entries in the other sg list on other page.
+						The old for-loop type could hit the bugs if the second sg list is not ine the subsequent page.
+05/10/2010	1.20.0X.15
+						1. support ARC-1880 series on kernel 2.6.X			
