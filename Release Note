@@ -1,0 +1,103 @@
+Release Note :
+
+12/09/2004	1.20.00.02	
+						1.bug fix with over 2T bytes RAID Volume
+01/09/2005	1.20.00.04	
+						1.fits for Debian linux kernel version 2.2.xx 
+03/20/2005	1.20.00.07	
+						1.cleanly as look like a Linux driver at 2.6.x
+06/23/2005	1.20.0X.08	
+						1.bug fix with abort command,in case of heavy loading when sata cable working on low quality connection
+			1.20.00.08	
+						1.for linux kernel 2.6.x only
+9/12/2005	1.20.0X.09	
+						1.bug fix with abort command handling,and firmware version check 
+						and firmware update notify for hardware bug fix
+9/23/2005	1.20.0X.10	
+						1.enhance sysfs function for change driver's max tag Q number.
+						2.add DMA_64BIT_MASK for backward compatible with all 2.6.x
+						3.add some useful message for abort command
+						4.add ioctl code 'ARCMSR_IOCTL_FLUSH_ADAPTER_CACHE'
+						customer can send this command for sync raid volume data
+9/29/2005	1.20.0X.11	
+						1.by comment of Arjan van de Ven fix incorrect msleep redefine
+						cast off sizeof(dma_addr_t) condition for 64bit pci_set_dma_mask
+9/30/2005	1.20.0X.12	
+						1.bug fix with 64bit platform's ccbs using if over 4G system memory
+						change 64bit pci_set_consistent_dma_mask into 32bit
+						increcct adapter count if adapter initialize fail.
+						2.miss edit at arcmsr_build_ccb....
+						psge += sizeof(struct _SG64ENTRY *) =>  psge += sizeof(struct _SG64ENTRY)
+						64 bits sg entry would be incorrectly calculated
+						thanks Kornel Wieliczek give me kindly notify and detail description
+11/15/2005	1.20.0X.13	
+						1.scheduling pending ccb with 'first in first out'
+						2.new firmware update notify
+11/07/2006	1.20.0X.13	
+						1.remove #include config.h and devfs_fs_kernel.h
+						2.enlarge the timeout duration of each scsi command.
+						it could aviod the vibration factor with sata disk on some bad chassis 
+05/02/2007	1.20.0X.14	
+						1.add PCI-Express error recovery function and AER capability	
+						2.add the selection of ARCMSR_MAX_XFER_SECTORS_B=4096 if firmware version is newer than 1.41
+						3.modify arcmsr_iop_reset to improve the stability
+						4.delect arcmsr_modify_timeout routine because it would malfunction as removal and recovery the lun
+						if somebody needs to adjust the scsi command timeout value, the script could be available on Areca FTP site or contact Areca support team 
+						5.modify the ISR, arcmsr_interrupt routine, to prevent the inconsistent with sg_mod driver if application directly calls the arcmsr driver 
+						w/o passing through  scsi mid layer		
+						6.delect the callback function, arcmsr_ioctl
+08/27/2007	1.20.0X.14      
+						1. modify orig_mask to readl(&reg->outbound_intmask)|ARCMSR_MU_OUTBOUND_MESSAGE0_INTMASKENABLE in arcmsr_disable_allintr() 
+						2. delect the left_value "results" from pci_enable_pcie_error_reporting(pdev) in arcmsr_probe()
+09/13/2007  1.20.0X.14        	
+						1. modify acb->devstate[i][j]=ARECA_RAID_GONE as ARECA_RAID_GOOD in arcmsr_initialize()
+09/17/2007  1.20.0X.15
+						1. support ARC1200/1201/1202, which is named ACB_ADAPTER_TYPE_B
+						2. modify the arcmsr_pci_slot_reset function
+						3. modify the arcmsr_pci_ers_disconnect_forepart function
+						4. modify the arcmsr_pci_ers_need_reset_forepart function
+10/01/2007  1.20.0X.15		
+						1. add arcmsr_enable_eoi_mode()
+12/04/2007	1.20.0X.15	
+						1. modify arcmsr_drain_donequeue() to ignore unknown command and let kernel process command timeout. 
+						This could handle IO request violating max. segments while Linux XFS over DM-CRYPT. 
+						Thanks to Milan Broz's comments <mbroz@redhat.com>
+						2. delete the limit of if dev_aborts[id][lun]>1, then acb->devstate[id][lun] = ARECA_RAID_GONE in arcmsr_abort()
+12/24/2007   1.20.0X.15		
+						1.fix the portability problems
+						2.fix type B where we should _not_ iounmap() acb->pmu;
+						it's not ioremapped.
+						3.add return -ENOMEM if ioremap() fails
+						4.transfer IS_SG64_ADDR w/ cpu_to_le32()
+						in arcmsr_build_ccb
+						5. modify acb->devstate[i][j] as ARECA_RAID_GONE instead of 
+						ARECA_RAID_GOOD in arcmsr_alloc_ccb_pool()
+						6.fix arcmsr_cdb->Context as (unsigned long)arcmsr_cdb
+						7.add the checking state of
+						(outbound_intstatus & ARCMSR_MU_OUTBOUND_HANDLE_INT) == 0
+						in arcmsr_handle_hba_isr
+						8.replace pci_alloc_consistent()/pci_free_consistent() with kmalloc()/kfree() in arcmsr_iop_message_xfer()
+						9. fix the release of dma memory for type B in arcmsr_free_ccb_pool()
+						10.fix the arcmsr_polling_hbb_ccbdone()
+02/27/2008	1.20.0X.15	
+						1.arcmsr_iop_message_xfer() is called from atomic context under the
+						queuecommand scsi_host_template handler. James Bottomley pointed out
+						that the current GFP_KERNEL|GFP_DMA flags are wrong: firstly we are in
+						atomic context, secondly this memory is not used for DMA.
+						Also removed some unneeded casts. Thanks to Daniel Drake <dsd@gentoo.org>
+04/07/2008	1.20.0X.15
+						1.add the function to detect if FW being alive
+						2.add the function of HW reset for Type_A after kernel version greater than 2.6.0
+						3.add the function to automatic scan as the volume added or delected
+						4.support the notification of the FW status to the AP layer
+03/06/2008	1.20.0X.15	
+						1.support SG-related functions after kernel-2.6.2x
+03/11/2008	1.20.0X.15
+						1.fix the syntax error
+						2.compatible to kernel-2.6.26
+05/06/2009	1.20.0X.15
+						1. improve SCSI EH mechanism for ARC-1680 series
+06/02/2009	1.20.0X.15
+						1. fix cli access unavailably issue on ARC-1200/1201 while a certain HD is unstable
+06/05/2009	1.20.0X.15
+						1. suport the maximum transfer size to 16M 				

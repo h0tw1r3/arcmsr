@@ -1,119 +1,61 @@
-******************************************************************************************
-**        O.S   : Linux
-**   FILE NAME  : arcmsr.c
-**   BY    : Erich Chen   
-**   Description: SCSI RAID Device Driver for 
-**                ARCMSR RAID Host adapter 
-************************************************************************
-** Copyright (C) 2002 - 2005, Areca Technology Corporation All rights reserved.
-**
-**     Web site: www.areca.com.tw
-**       E-mail: support@areca.com.tw
-**
-** This program is free software; you can redistribute it and/or modify
-** it under the terms of the GNU General Public License version 2 as
-** published by the Free Software Foundation.
-** This program is distributed in the hope that it will be useful,
-** but WITHOUT ANY WARRANTY; without even the implied warranty of
-** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-** GNU General Public License for more details.
-************************************************************************
-** Redistribution and use in source and binary forms,with or without
-** modification,are permitted provided that the following conditions
-** are met:
-** 1. Redistributions of source code must retain the above copyright
-**    notice,this list of conditions and the following disclaimer.
-** 2. Redistributions in binary form must reproduce the above copyright
-**    notice,this list of conditions and the following disclaimer in the
-**    documentation and/or other materials provided with the distribution.
-** 3. The name of the author may not be used to endorse or promote products
-**    derived from this software without specific prior written permission.
-**
-** THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
-** IMPLIED WARRANTIES,INCLUDING,BUT NOT LIMITED TO,THE IMPLIED WARRANTIES
-** OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
-** IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT,INDIRECT,
-** INCIDENTAL,SPECIAL,EXEMPLARY,OR CONSEQUENTIAL DAMAGES(INCLUDING,BUT
-** NOT LIMITED TO,PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-** DATA,OR PROFITS; OR BUSINESS INTERRUPTION)HOWEVER CAUSED AND ON ANY
-** THEORY OF LIABILITY,WHETHER IN CONTRACT,STRICT LIABILITY,OR TORT
-**(INCLUDING NEGLIGENCE OR OTHERWISE)ARISING IN ANY WAY OUT OF THE USE OF
-** THIS SOFTWARE,EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-**************************************************************************
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-       Thanks to: 
-                 Tamas TEVESZ <ice@extreme.hu> kindness comment for 
-                       Out-of-tree build
-                 Doug Goldstein <doug@monetra.com> kindness comment for 
-                       Kconfig.arcmsr file create
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-There are two ways to build the arcmsr driver.
-
-1. In-tree build
-================
-
-Copy the `arcmsr' directory to $KSRC/drivers/scsi, then manually edit the
-following two files to add the options necessary to build the driver:
---------------------------------------------------------------------------------------------
-Add the following line to $KSRC/drivers/scsi/Makefile:
-
-obj-$(CONFIG_SCSI_ARCMSR)       += arcmsr/
-
---------------------------------------------------------------------------------------------
-Add the following block to $KSRC/drivers/scsi/Kconfig:
-
-source "drivers/scsi/arcmsr/Kconfig.arcmsr"
-
---------------------------------------------------------------------------------------------
-Now configure and build your kernel as you usually do, paying attention to
-select the Device Drivers -> SCSI device support -> SCSI low-level drivers -> ARECA SATA/SAS RAID Host Controller option.
-
-2. Out-of-tree build
-====================
-
-This option is particularly useful if you are running a stock kernel supplied
-by your Linux distributor, or for other reason do not want to perform a full
-kernel build. Please note that this way you will only be able to build a module
-version of the arcmsr driver; also note that you will need at least the headers
-and configuration file your current kernel was built with.
-
-Provided that you meet all the above prerequisites, building the arcmsr driver
-module is done with the following command:
-
-# cd arcmsr 
-# make -C /lib/modules/`uname -r`/build CONFIG_SCSI_ARCMSR=m SUBDIRS=$PWD modules 
-
-3. For kernel 2.4 users
-======================
-
-Copy the `arcmsr' directory to $KSRC/drivers/scsi, then manually edit the
-following two files to add the options necessary to build the driver:
---------------------------------------------------------------------------------------------
-Add the following line to $KSRC/drivers/scsi/Makefile:
-
-subdir-$(CONFIG_SCSI_ARCMSR)	+= arcmsr
-obj-$(CONFIG_SCSI_ARCMSR)	+= arcmsr/arcmsr.o
---------------------------------------------------------------------------------------------
-Add the following block to $KSRC/drivers/scsi/Config.in:
-
-if [ "$CONFIG_PCI" = "y" ]; then
-   dep_tristate 'ARECA ARC11X0[PCI-X]/ARC12X0[PCI-EXPRESS] SATA-RAID support' CONFIG_SCSI_ARCMSR $CONFIG_SCSI
- fi
-
---------------------------------------------------------------------------------------------
-Now configure and build your kernel as you usually do, paying attention to
-select the Device Drivers -> SCSI device support -> SCSI low-level drivers -> ARECA SATA/SAS RAID Host Controller option.
-
----------------------------------------------------------------------------------------------
-Notice :
-
-if the kernel have arcmsr driver buildin but the version is older than 1.20.00.15, 
-you have to added new controller's defination to avoid compile error...
-
-Add the following block to $KSRC/include/linux/pci_ids.h
-#define PCI_DEVICE_ID_ARECA_1200    0x1200
-#define PCI_DEVICE_ID_ARECA_1201    0x1201
-#define PCI_DEVICE_ID_ARECA_1202    0x1202
-
+ Areca (ARC-11XX/12XX/16XX) SATA/SAS RAID Controller Driver Source Code User Guide
+===================================================================================================
+===================================================================================================
+Contact 
+mail address: support@areca.com.tw
+Tel: 886-2-8797-4060 Ext.223
+Fax: 886-2-8797-5970
+Web site: www.areca.com.tw
+===================================================================================================
+===================================================================================================
+ 
+***************************************************************************************************   
+** 1. Contents                                                      			 				 **
+***************************************************************************************************   
+	1. readme.txt							- the guidance for ARC-11XX/12XX/16XX driver
+	2. arcmsr.c								- driver source
+	3. arcmsr.h								- driver source
+	4. kernel-version-2.5.x-2.3.x/arcmsr	- driver folder applicable to kernel-2.4.*
+	5. kernel-version-2.6.x/arcmsr			- driver folder applicable to kernel-2.6.*
+	6. release note							- change log
+***************************************************************************************************   
+** 2. Compile and install arcmsr RAID driver on the running system  			 				 **
+***************************************************************************************************   
+	2.1 select a folder which is applicable to your kernel version 
+	2.2 copy that folder to /root, i.e. cp -r kernel-version-* /root
+	2.3 cd /root/kernel-version-*/arcmsr, in the folder there is a Makefile file
+	2.4 copy arcmsr.c and arcmsr.h to your $PWD 
+	2.5 make -C /lib/modules/`uname -r`/build CONFIG_SCSI_ARCMSR=m SUBDIRS=$PWD modules
+	2.6 insmod arcmsr.ko to your system, i.e. insmod arcmsr.ko,
+      if something wrong, please check the kernel version is appropriate to the folder you select
+	  or check the output when you compile the driver. If everything is ok, please go to next step.
+	2.7 copy arcmsr.ko to /lib/modules/`uname -r`/kernel/drivers/scsi/
+	2.8 make a new initrd image
+		An initrd image is needed for loading your SCSI module at boot time.
+		So you need update your initrd image.....
+		First, insert and add this context description into /etc/modprobe.conf
+			Example:
+			@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+			@       ......
+			@   alias scsi_hostadapter arcmsr		<----add this entry
+			@       ......
+			@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		Second, build up a new initrd image. Assume your kernel version is 2.6.18-53.el5.
+			# mkinitrd -f -v /boot/initrd-2.6.18-53.el5.custom.img 2.6.18-53.el5
+	2.9 insert and add these entries into /boot/grub/grub.conf
+		Example:
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		@  ......
+		@ title Red Hat Linux (2.6.18-53.el5)
+		@	root (hd0,0)										<----This depends on your root partition
+		@	kernel /vmlinuz-2.6.18-53.el5 ro root=/dev/hda2		<----This depends on your root partition
+		@	initrd /initrd-2.6.18-53.el5.img
+		@
+		@ title Red Hat Linux (2.6.18-53.el5)custom				<----add this entry
+		@	root (hd0,0)										<----add this entry
+		@	kernel /vmlinuz-2.6.18-53.el5 ro root=/dev/hda2		<----add this entry which goes with your root partition
+		@   initrd /initrd-2.6.18-53.el5.custom.img				<----add this entry
+		@  ......
+		@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ 
+	2.10 designate the bootup item in /etc/grub.conf  
+	2.11 reboot
