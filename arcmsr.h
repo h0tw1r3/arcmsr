@@ -3,8 +3,7 @@
 **        O.S   : Linux
 **   FILE NAME  : arcmsr.h
 **        BY    : Erich Chen   
-**   Description: SCSI RAID Device Driver for 
-**                ARCMSR RAID Host adapter
+**   Description: SCSI RAID Device Driver for Areca RAID Host Bus Adapter
 ***********************************************************************************************
 ** Copyright (C) 2002 - 2005, Areca Technology Corporation All rights reserved.
 **
@@ -56,18 +55,44 @@
 */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
 	#define ARCMSR_MAX_OUTSTANDING_CMD				256
-	#define ARCMSR_MAX_FREECCB_NUM					288 
+	#define ARCMSR_MAX_FREECCB_NUM					320 
 #else
 	#define ARCMSR_MAX_OUTSTANDING_CMD				230
  	#define ARCMSR_MAX_FREECCB_NUM					240 
 #endif
+
 #ifndef __user
-   #define __user
+	#define __user
 #endif
+
 #ifndef __iomem
-   #define __iomem          
+	#define __iomem          
 #endif
-#define ARCMSR_DRIVER_VERSION							"Driver Version 1.20.0X.15 2007/12/24"
+/*
+#ifndef _LINUX_TYPES_H
+	#ifdef __CHECKER__
+		#define __bitwise__ __attribute__((bitwise))
+	#else
+		#define __bitwise__
+	#endif
+
+	#ifdef __CHECK_ENDIAN__
+		#define __bitwise __bitwise__
+	#else
+		#define __bitwise
+	#endif
+
+	#ifndef __le32
+		typedef __u32 __bitwise __le32;
+	#endif
+#endif
+*/
+
+#ifndef __le32
+	#define __le32 uint32_t
+#endif
+
+#define ARCMSR_DRIVER_VERSION							"Driver Version 1.20.0X.15 2008/02/27"
 #define ARCMSR_SCSI_INITIATOR_ID						255
 #define ARCMSR_MAX_XFER_SECTORS						512 /* (512*512) / 1024 = 0x0040000 (256K) */
 #define ARCMSR_MAX_XFER_SECTORS_B					4096 /* (4096*512) / 1024 = 0x0100000 (1M) */
@@ -163,7 +188,7 @@
 #endif
 
 #ifndef SA_SHIRQ
-	#define SA_SHIRQ		IRQF_SHARED
+	#define SA_SHIRQ	IRQF_SHARED
 #endif
 
 #ifndef spin_trylock_irqsave
@@ -246,14 +271,19 @@ struct CMD_MESSAGE_FIELD
 #define IS_SG64_ADDR			0x01000000	/* bit24								*/
 struct  SG32ENTRY							/* size 8 bytes						*/
 {                                             				 	/* length bit 24 == 0					*/
-    __le32						length;		/* high 8 bit == flag,low 24 bit == length	*/
-    __le32						address;
+    //__le32						length;		/* high 8 bit == flag,low 24 bit == length	*/
+    //__le32						address;
+    uint32_t						length;		/* high 8 bit == flag,low 24 bit == length	*/
+    uint32_t						address;
 };
 struct  SG64ENTRY							/* size 12 bytes						*/
 {                                              					/* length bit 24 == 1					*/
-  	__le32       					length;		/* high 8 bit == flag,low 24 bit == length	*/
-   	__le32       					address;
-   	__le32       					addresshigh;
+  	//__le32       					length;		/* high 8 bit == flag,low 24 bit == length	*/
+   	//__le32       					address;
+   	//__le32       					addresshigh;
+  	uint32_t       					length;		/* high 8 bit == flag,low 24 bit == length	*/
+   	uint32_t       					address;
+   	uint32_t       					addresshigh;
 };
 struct SGENTRY_UNION
 {
@@ -577,48 +607,21 @@ struct MessageUnit_A
 	uint32_t	message_rbuffer[32];		/*0F00 0F7F  	32*/
 	uint32_t	reserved6[32];				/*0F80 0FFF  	32*/
 };
-//
-//struct HBB_DOORBELL
-//{
-//	uint8_t               		doorbell_reserved[132096]; 	/*reserved */
-//	uint32_t				drv2iop_doorbell;          		/*offset 0x00020400:00,01,02,03: window of "instruction flags" from driver to iop */
-//	uint32_t				drv2iop_doorbell_mask;     	/*04,05,06,07: doorbell mask */
-//	uint32_t				iop2drv_doorbell;          		/*08,09,10,11: window of "instruction flags" from iop to driver */
-//	uint32_t				iop2drv_doorbell_mask;     	/*12,13,14,15: doorbell mask */
-//};
-//
-//struct HBB_RWBUFFER
-//{
-//	uint8_t				message_reserved0[64000];   /*reserved */
-//	uint32_t				msgcode_rwbuffer[256];      	/*offset 0x0000fa00:   0,   1,   2,   3,...,1023: message code read write 1024bytes */
-//	uint32_t				message_wbuffer[32];        	/*offset 0x0000fe00:1024,1025,1026,1027,...,1151: user space data to iop 128bytes */
-//	uint32_t				message_reserved1[32];      	/*1152,1153,1154,1155,...,1279: message reserved*/
-//	uint32_t				message_rbuffer[32];        	/*offset 0x0000ff00:1280,1281,1282,1283,...,1407: iop data to user space 128bytes */ 
-//};
-//
+
 struct MessageUnit_B
 {
   	uint32_t	post_qbuffer[ARCMSR_MAX_HBB_POSTQUEUE];
   	uint32_t	done_qbuffer[ARCMSR_MAX_HBB_POSTQUEUE];
 	uint32_t	postq_index;
 	uint32_t	doneq_index;
-	uint32_t	__iomem	*drv2iop_doorbell;          		/*offset 0x00020400:00,01,02,03: window of "instruction flags" from driver to iop */
-	uint32_t	__iomem	*drv2iop_doorbell_mask;     	/*04,05,06,07: doorbell mask */
-	uint32_t	__iomem	*iop2drv_doorbell;          		/*08,09,10,11: window of "instruction flags" from iop to driver */
-	uint32_t	__iomem	*iop2drv_doorbell_mask;     	/*12,13,14,15: doorbell mask */
-	uint32_t	__iomem	*msgcode_rwbuffer;      		/*offset 0x0000fa00:   0,   1,   2,   3,...,1023: message code read write 1024bytes */
-	uint32_t	__iomem	*message_wbuffer;        		/*offset 0x0000fe00:1024,1025,1026,1027,...,1151: user space data to iop 128bytes */
-	uint32_t	__iomem	*message_rbuffer;        		/*offset 0x0000ff00:1280,1281,1282,1283,...,1407: iop data to user space 128bytes */ 
+	void	__iomem	*drv2iop_doorbell;          		/*offset 0x00020400:00,01,02,03: window of "instruction flags" from driver to iop */
+	void	__iomem	*drv2iop_doorbell_mask;     	/*04,05,06,07: doorbell mask */
+	void	__iomem	*iop2drv_doorbell;          		/*08,09,10,11: window of "instruction flags" from iop to driver */
+	void	__iomem	*iop2drv_doorbell_mask;     	/*12,13,14,15: doorbell mask */
+	void	__iomem	*msgcode_rwbuffer;      		/*offset 0x0000fa00:   0,   1,   2,   3,...,1023: message code read write 1024bytes */
+	void	__iomem	*message_wbuffer;        		/*offset 0x0000fe00:1024,1025,1026,1027,...,1151: user space data to iop 128bytes */
+	void	__iomem	*message_rbuffer;        		/*offset 0x0000ff00:1280,1281,1282,1283,...,1407: iop data to user space 128bytes */ 
 };
-
-//struct MessageUnit
-//{
-//	union
-//	{
-//		struct MessageUnit_A	pmu_A;
-//  		struct MessageUnit_B	pmu_B;
-//	} u;
-//};
 
 /*
 ************************************************************************************************
@@ -733,7 +736,6 @@ struct AdapterControlBlock
 	unsigned long							vir2phy_offset;             	/* Offset is used in making arc cdb physical to virtual calculations */
 	uint32_t								outbound_int_enable;
 
-//	struct MessageUnit			   			*pmu;                      	/* message unit ATU inbound base address0 */
 	union {
 		struct MessageUnit_A __iomem *	pmuA;
 		struct MessageUnit_B *				pmuB;
@@ -775,7 +777,7 @@ struct AdapterControlBlock
 	uint8_t                         					devstate[ARCMSR_MAX_TARGETID][ARCMSR_MAX_TARGETLUN]; /* id0 ..... id15,lun0...lun7 */
 	#define ARECA_RAID_GONE               	0x55
 	#define ARECA_RAID_GOOD			0xaa
-	uint8_t	            						dev_aborts[ARCMSR_MAX_TARGETID][ARCMSR_MAX_TARGETLUN]; /* id0 ..... id15,lun0...lun7 */;
+	uint8_t	            						dev_aborts[ARCMSR_MAX_TARGETID][ARCMSR_MAX_TARGETLUN]; /* id0 ..... id15,lun0...lun7 */
 	uint32_t		                				num_aborts;
 	uint32_t		                				num_resets;
 	uint32_t                        				firm_request_len;				/*	1,04-07	*/

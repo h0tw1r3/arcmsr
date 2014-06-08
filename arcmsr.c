@@ -1,15 +1,14 @@
 /*
 ******************************************************************************************
-**	  O.S	: Linux
-**   FILE NAME	: arcmsr.c
-**	  BY	: Erich	Chen   
-**   Description: SCSI RAID Device Driver for 
-**		  ARCMSR RAID Host adapter 
+**	O.S		: Linux
+**	FILE NAME	: arcmsr.c
+**	BY		: Erich	Chen   
+**	Description	: SCSI RAID Device Driver for Areca RAID Host Bus Adapter 
 ************************************************************************
 ** Copyright (C) 2002 -	2005, Areca Technology Corporation All rights reserved.
 **
-**     Web site: www.areca.com.tw
-**	 E-mail: support@areca.com.tw
+**	Web site: www.areca.com.tw
+**	E-mail: support@areca.com.tw
 **
 ** This	program	is free	software; you can redistribute it and/or modify
 ** it under the	terms of the GNU General Public	License	version	2 as
@@ -43,71 +42,95 @@
 **************************************************************************
 ** History
 **
-**	  REV#	    DATE(MM/DD/YYYY)		NAME		       DESCRIPTION
-**     1.00.00.00       3/31/2004	        Erich Chen	              First release
-**     1.10.00.04       7/28/2004	        Erich Chen	              modify	for ioctl
-**     1.10.00.06       8/28/2004	        Erich Chen	              modify	for 2.6.x
-**     1.10.00.08       9/28/2004	        Erich Chen	              modify	for x86_64 
-**     1.10.00.10      10/10/2004	        Erich Chen	              bug fix	for SMP	& ioctl
-**     1.20.00.00      11/29/2004	        Erich Chen	              bug fix	with arcmsr_bus_reset when PHY error
-**     1.20.00.02      12/09/2004	        Erich Chen	              bug fix	with over 2T bytes RAID	Volume
-**     1.20.00.04       1/09/2005		Erich Chen	              fits for Debian linux kernel version 2.2.xx 
-**     1.20.0X.07       3/28/2005		Erich Chen	              sync for 1.20.00.07 (linux.org version)
-**							                   			       remove some unused function
-**							                   			       --.--.0X.-- is  for old style kernel compatibility
-**     1.20.0X.08       6/23/2005	        Erich Chen	              bug fix with abort command,in case of heavy loading when sata cable
-**							                   			       working on low quality connection
-**     1.20.0X.09       9/12/2005	        Erich Chen	              bug fix with abort command handling,and firmware version check	
-**							                   			        and firmware update notify for hardware bug fix
-**     1.20.0X.10       9/23/2005	        Erich Chen	               enhance sysfs function for change driver's max tag Q number.
-**							                   			        add DMA_64BIT_MASK for backward compatible with all 2.6.x
-**							                   			        add some useful message for abort command
-**							                   			        add ioctl code 'ARCMSR_MESSAGE_FLUSH_ADAPTER_CACHE'
-**							                   			        customer can send this command for sync raid volume data
-**     1.20.0X.11       9/29/2005	        Erich Chen	               by comment of Arjan van de Ven fix incorrect msleep redefine
-**							                   			        cast off sizeof(dma_addr_t) condition for 64bit pci_set_dma_mask
-**     1.20.0X.12       9/30/2005	        Erich Chen	               bug fix with 64bit platform's ccbs using if over 4G system memory
-**							                   			        change 64bit pci_set_consistent_dma_mask into 32bit
-**							                  			        increcct adapter count if adapter initialize fail.
-**							                  		                miss edit at arcmsr_build_ccb....
-**							                   			         psge += sizeof(struct SG64ENTRY *) => psge += sizeof(struct SG64ENTRY)
-**							                   			         64 bits sg entry would be incorrectly calculated
-**							                   			         thanks Kornel Wieliczek give me kindly notify and detail description
-**     1.20.0X.13      11/15/2005	        Erich Chen	                 scheduling pending ccb with 'first in first out'
-**							                                             new firmware update notify
-**		                11/07/2006	        Erich Chen	                 1.remove #include config.h and devfs_fs_kernel.h
-**                                                                                           2.enlarge the timeout duration of each scsi command it could aviod the vibration factor 
-**     						                                             with sata disk on some bad machine
+** REV#		DATE		NAME				DESCRIPTION
+** 1.00.00.00	03/31/2004	Erich Chen			First release
+** 1.10.00.04	07/28/2004	Erich Chen			modify for ioctl
+** 1.10.00.06	08/28/2004	Erich Chen			modify for 2.6.x
+** 1.10.00.08	09/28/2004	Erich Chen			modify	for x86_64 
+** 1.10.00.10	10/10/2004	Erich Chen			bug fix	for SMP& ioctl
+** 1.20.00.00	11/29/2004	Erich Chen			bug fix	with arcmsr_bus_reset when PHY error
+** 1.20.00.02	12/09/2004	Erich Chen			bug fix	with over 2T bytes RAIDVolume
+** 1.20.00.04	01/09/2005	Erich Chen			bug fix	fits for Debian linux kernel version 2.2.xx 
+** 1.20.0X.07	03/28/2005	Erich Chen			bug fix	sync for 1.20.00.07 (linux.org version)
+**								remove some unused function
+**								--.--.0X.-- is  for old style kernel compatibility
+** 1.20.0X.08 	06/23/2005	Erich Chen			bug fix with abort command, in case of heavy loading 
+**								when sata cable working on low quality connection
+** 1.20.0X.09	9/12/2005	Erich Chen			bug fix with abort command handling,
+**								and firmware version check and FW update notify 
+**								for HW bug fix
+** 1.20.0X.10	9/23/2005	Erich Chen			enhance sysfs function for change driver's max tag Q number.
+**								add DMA_64BIT_MASK for backward compatible with all 2.6.x
+**								add some useful message for abort command
+**								add ioctl code 'ARCMSR_MESSAGE_FLUSH_ADAPTER_CACHE'
+**								customer can send this command for sync raid volume data
+** 1.20.0X.11	9/29/2005	Erich Chen			by comment of Arjan van de Ven fix incorrect msleep redefine
+**								cast off sizeof(dma_addr_t) condition for 
+**								64bit pci_set_dma_mask
+** 1.20.0X.12	9/30/2005	Erich Chen			bug fix with 64bit platform's ccbs using 
+**								if over 4G system memory
+**								change 64bit pci_set_consistent_dma_mask into 32bit
+**								increcct adapter count if adapter initialize fail.
+**								miss edit psge += sizeof(struct SG64ENTRY *) as 
+**								psge += sizeof(struct SG64ENTRY) at arcmsr_build_ccb
+**								64 bits sg entry would be incorrectly calculated
+**								thanks to Kornel Wieliczek's great help
+** 1.20.0X.13	11/15/2005	Erich Chen			scheduling pending ccb with 'first in first out'
+**								new firmware update notify
+**		11/07/2006	Erich Chen      		1.remove #include config.h and devfs_fs_kernel.h
+**								2.enlarge the timeout duration for each scsi command 
+**								it could aviod the vibration factor with sata disk
+**								on some bad machine
 **							   
-**     1.20.0X.14      05/02/2007	        Erich Chen/Nick Cheng	    1.add PCI-Express error recovery function and AER capability	
-**                                                                         			    2.add the selection of ARCMSR_MAX_XFER_SECTORS_B=4096 if firmware version is newer than 1.41
-**                                                                                           3.modify arcmsr_iop_reset to improve the stability
-**											                  4.delect arcmsr_modify_timeout routine because it would malfunction as removal and recovery the lun
-**											                  if somebody needs to adjust the scsi command timeout value, the script could be available on Areca FTP site or contact Areca support team 
-**											                  5.modify the ISR, arcmsr_interrupt routine, to prevent the inconsistent with sg_mod driver if application directly calls the arcmsr driver 
-**											                  w/o passing through  scsi mid layer		
-**												           6.delect the callback function, arcmsr_ioctl
+** 1.20.0X.14	05/02/2007	Erich Chen & Nick Cheng		1.add PCI-Express error recovery function and AER capability
+**                                                      	2.add the selection of ARCMSR_MAX_XFER_SECTORS_B=4096 
+**								if firmware version is newer than 1.41
+**                                                      	3.modify arcmsr_iop_reset to improve the stability
+**								4.delect arcmsr_modify_timeout routine 
+**								because it would malfunction as removal and recovery the lun
+**								if somebody needs to adjust the scsi command timeout value, 
+**								the script could be available on Areca FTP site 
+**								or contact Areca support team 
+**								5.modify the ISR, arcmsr_interrupt routine, 
+**								to prevent the inconsistent with sg_mod driver 
+**								if application directly calls the arcmsr driver 
+**								w/o passing through scsi mid layer		
+**								6.delect the callback function, arcmsr_ioctl
 **
 **
-**     1.20.0X.15      23/08/2007		Erich Chen & Nick Cheng	1.support ARC1200/1201/1202
-**     1.20.0X.15      01/10/2007		Erich Chen & Nick Cheng	1. add arcmsr_enable_eoi_mode()
-**	 1.20.0X.15	  04/12/2007		Erich Chen & Nick Cheng	1.delete the limit of if dev_aborts[id][lun]>1, then acb->devstate[id][lun] = ARECA_RAID_GONE in arcmsr_abort()
-**														to wait for OS recovery on delicate HW
-**														2. modify arcmsr_drain_donequeue() to ignore unknown command and let kernel process command timeout.
-**														This could handle IO request violating max. segments while Linux XFS over DM-CRYPT. 
-**														Thanks to Milan Broz's comments <mbroz@redhat.com>
+** 1.20.0X.15	23/08/2007	Erich Chen & Nick Cheng		1.support ARC1200/1201/1202
+** 1.20.0X.15	01/10/2007	Erich Chen & Nick Cheng		1.add arcmsr_enable_eoi_mode()
+** 1.20.0X.15	04/12/2007	Erich Chen & Nick Cheng		1.delete the limit of if dev_aborts[id][lun]>1, then
+**								acb->devstate[id][lun] = ARECA_RAID_GONE in arcmsr_abort()
+**								to wait for OS recovery on delicate HW
+**								2.modify arcmsr_drain_donequeue() to ignore unknown command
+**								and let kernel process command timeout.
+**								This could handle IO request violating max. segments 
+**								while Linux XFS over DM-CRYPT. 
+**								Thanks to Milan Broz's comments <mbroz@redhat.com>
 **
-**     1.20.0X.15	  24/12/2007	       Erich Chen & Nick Cheng       1.fix the portability problems
-**														 2.fix type B where we should _not_ iounmap() acb->pmu; it's not ioremapped.
-**														 3.add return -ENOMEM if ioremap() fails
-**														 4.transfer IS_SG64_ADDR w/ cpu_to_le32() in arcmsr_build_ccb
-**														 5.modify acb->devstate[i][j] as ARECA_RAID_GONE instead of ARECA_RAID_GOOD in arcmsr_alloc_ccb_pool()
-**														 6.fix arcmsr_cdb->Context as (unsigned long)arcmsr_cdb
-**														 7.add the checking state of (outbound_intstatus & ARCMSR_MU_OUTBOUND_HANDLE_INT) == 0
-**														 in arcmsr_handle_hba_isr()
-**														 8.replace pci_alloc_consistent()/pci_free_consistent() with kmalloc()/kfree() in arcmsr_iop_message_xfer()
-**														 9. fix the release of dma memory for type B in arcmsr_free_ccb_pool()
-**														10.fix the arcmsr_polling_hbb_ccbdone()
+** 1.20.0X.15	24/12/2007	Erich Chen & Nick Cheng		1.fix the portability problems
+**								2.fix type B where we should _not_ iounmap() acb->pmu;
+**								it's not ioremapped.
+**								3.add return -ENOMEM if ioremap() fails
+**								4.transfer IS_SG64_ADDR w/ cpu_to_le32() in arcmsr_build_ccb
+**								5.modify acb->devstate[i][j] as ARECA_RAID_GONE 
+**								instead of ARECA_RAID_GOOD in arcmsr_alloc_ccb_pool()
+**								6.fix arcmsr_cdb->Context as (unsigned long)arcmsr_cdb
+**								7.add the checking state of (outbound_intstatus &
+**								ARCMSR_MU_OUTBOUND_HANDLE_INT) == 0 in arcmsr_handle_hba_isr
+**								8.replace pci_alloc_consistent()/pci_free_consistent() 
+**								with kmalloc()/kfree() in arcmsr_iop_message_xfer()
+**								9. fix the release of dma memory for type B 
+**								in arcmsr_free_ccb_pool()
+**								10.fix the arcmsr_polling_hbb_ccbdone()
+** 1.20.0X.15	02/27/2008	Erich Chen & Nick Cheng		1.arcmsr_iop_message_xfer() is called from 
+**								atomic context under the queuecommand scsi_host_template
+**								handler. James Bottomley pointed out that the current
+**								GFP_KERNEL|GFP_DMA flags are wrong: firstly we are in
+**								atomic context, secondly this memory is not used for DMA.
+**								Also removed some unneeded casts.
+**								Thanks to Daniel Drake <dsd@gentoo.org>
 ******************************************************************************************
 */
 #define	ARCMSR_DEBUG		0
@@ -141,6 +164,7 @@
 	#include <linux/interrupt.h>
 	#include <linux/smp_lock.h>
 	#include <linux/stddef.h>
+
 	#if LINUX_VERSION_CODE >=KERNEL_VERSION(2,5,0)
 		#include <linux/pci_ids.h>
 		#include <linux/moduleparam.h>
@@ -185,7 +209,7 @@ MODULE_AUTHOR("Erich Chen <support@areca.com.tw>");
 #if LINUX_VERSION_CODE >=KERNEL_VERSION(2,6,0)
 MODULE_VERSION(ARCMSR_DRIVER_VERSION);
 #endif
-MODULE_DESCRIPTION("Areca (ARC11xx/12xx/13xx/16xx) SATA/SAS RAID HOST Adapter");
+MODULE_DESCRIPTION("Areca (ARC11xx/12xx/13xx/16xx) SATA/SAS RAID Host Bus Adapter");
 
 #ifdef MODULE_LICENSE
 MODULE_LICENSE("Dual BSD/GPL");
@@ -195,12 +219,7 @@ MODULE_LICENSE("Dual BSD/GPL");
 **********************************************************************************
 **********************************************************************************
 */
-#if ARCMSR_DEBUG
-static unsigned long arcmsr_do_interrupt_prev_jiffy;
-static unsigned long arcmsr_interrupt_prev_jiffy;
-static unsigned long arcmsr_handle_hba_isr_prev_jiffy;
-static unsigned long arcmsr_handle_hbb_isr_prev_jiffy;
-#endif
+
 static u_int8_t	arcmsr_adapterCnt=0;
 static struct HCBARC arcmsr_host_control_block;
 static int arcmsr_alloc_ccb_pool(struct AdapterControlBlock *acb);
@@ -318,13 +337,6 @@ static void arcmsr_define_adapter_type(struct AdapterControlBlock *acb);
 	    	struct AdapterControlBlock *acbtmp;
 		unsigned long flags;
 		int i=0;
-
-    		#if ARCMSR_DEBUG
-			if (time_after(jiffies, 1*HZ + arcmsr_do_interrupt_prev_jiffy)){
-				arcmsr_interrupt_prev_jiffy = jiffies;
-				printk("arcmsr_do_interrupt...................................\n");
-				}
-    		#endif
 
 		acb = (struct AdapterControlBlock *)dev_id;
 		acbtmp = pHCBARC->acb[i];
@@ -762,7 +774,7 @@ static void arcmsr_define_adapter_type(struct AdapterControlBlock *acb);
 				#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
 				host->max_cmd_len=16;		 /*this is issue of 64bit LBA ,over 2T byte*/
 	    			#endif
-					
+
 				host->sg_tablesize=ARCMSR_MAX_SG_ENTRIES;
 				host->can_queue=ARCMSR_MAX_FREECCB_NUM;	/* max simultaneous cmds */		
 				host->cmd_per_lun=ARCMSR_MAX_CMD_PERLUN;	    
@@ -786,7 +798,6 @@ static void arcmsr_define_adapter_type(struct AdapterControlBlock *acb);
 						printk("arcmsr_detect:	request_irq got ERROR...................\n");
 						arcmsr_adapterCnt--;
 						pHCBARC->acb[acb->adapter_index]=NULL;
-						iounmap(acb->pmu);
 						arcmsr_free_ccb_pool(acb);
 					    	scsi_unregister(host);
 						goto next_areca;
@@ -797,7 +808,6 @@ static void arcmsr_define_adapter_type(struct AdapterControlBlock *acb);
 							printk("arcmsr_detect:	pci_request_regions got	ERROR...................\n");
 							arcmsr_adapterCnt--;
 							pHCBARC->acb[acb->adapter_index]=NULL;
-							iounmap(acb->pmu);
 							arcmsr_free_ccb_pool(acb);
 					    		scsi_unregister(host);
 							goto next_areca;
@@ -854,21 +864,21 @@ static void arcmsr_define_adapter_type(struct AdapterControlBlock *acb);
 	**********************************************************************************
 	**********************************************************************************
 	*/
-//	static void arcmsr_modify_timeout(struct scsi_cmnd *cmd)
-//	{
-//		/* 
-//		**********************************************************************
-//		** int mod_timer(struct timer_list *timer, unsigned long expires)
-//		** The function returns whether it has modified a pending timer or not.
-//		** (ie. mod_timer() of an inactive timer returns 0, mod_timer() of an
-//		** active timer returns 1.)
-//		** mod_timer(timer, expires) is equivalent to:
-//		** del_timer(timer); timer->expires = expires; add_timer(timer);
-//		**********************************************************************
-//		*/
-//		cmd->timeout_per_command = ARCMSR_SD_TIMEOUT*HZ;
-//		mod_timer(&cmd->eh_timeout, jiffies + ARCMSR_SD_TIMEOUT*HZ);
-//	}
+	static void arcmsr_modify_timeout(struct scsi_cmnd *cmd)
+	{
+		/* 
+		**********************************************************************
+		** int mod_timer(struct timer_list *timer, unsigned long expires)
+		** The function returns whether it has modified a pending timer or not.
+		** (ie. mod_timer() of an inactive timer returns 0, mod_timer() of an
+		** active timer returns 1.)
+		** mod_timer(timer, expires) is equivalent to:
+		** del_timer(timer); timer->expires = expires; add_timer(timer);
+		**********************************************************************
+		*/
+		cmd->timeout_per_command = ARCMSR_SD_TIMEOUT*HZ;
+		mod_timer(&cmd->eh_timeout, jiffies + ARCMSR_SD_TIMEOUT*HZ);
+	}
 	/*
 	************************************************************************
 	*Dapendent on the PCI_DEVICE_ID, to define its adapter type
@@ -1095,7 +1105,6 @@ void arcmsr_ccb_complete(struct CommandControlBlock *ccb, int stand_flag)
 		spin_lock_irqsave(&io_request_lock, flags);
 		pcmd->scsi_done(pcmd);
 		spin_unlock_irqrestore(&io_request_lock, flags);
-	
 	#endif
 }
 /*
@@ -1110,8 +1119,7 @@ void arcmsr_report_sense_info(struct CommandControlBlock *ccb)
 	#if ARCMSR_DEBUG
     		printk("arcmsr_report_sense_info...........\n");
 	#endif
-	
-	pcmd->result=DID_OK	<< 16;
+
 	if(pcmd->sense_buffer) {
 		memset(pcmd->sense_buffer, 0, SCSI_SENSE_BUFFERSIZE);
 		memcpy(pcmd->sense_buffer,ccb->arcmsr_cdb.SenseData,SCSI_SENSE_BUFFERSIZE);
@@ -1174,7 +1182,8 @@ static int arcmsr_build_ccb(struct AdapterControlBlock *acb,struct CommandContro
 {
 	struct ARCMSR_CDB *arcmsr_cdb= &ccb->arcmsr_cdb;
 	uint8_t *psge=(uint8_t * )&arcmsr_cdb->u;
-	__le32 address_lo,address_hi;
+	//__le32 address_lo,address_hi;
+	uint32_t address_lo,address_hi;
 	int arccdbsize=0x30,sgcount=0;
 	
 	#if ARCMSR_DEBUG
@@ -1191,7 +1200,8 @@ static int arcmsr_build_ccb(struct AdapterControlBlock *acb,struct CommandContro
     	arcmsr_cdb->Context=(unsigned long)arcmsr_cdb;
     	memcpy(arcmsr_cdb->Cdb, pcmd->cmnd, pcmd->cmd_len);
 	if(pcmd->use_sg) {
-		__le32 length;
+		//__le32 length;
+		int length;
 		int i,cdb_sgcount = 0;
 		struct scatterlist *sl;
 
@@ -1202,7 +1212,7 @@ static int arcmsr_build_ccb(struct AdapterControlBlock *acb,struct CommandContro
     		#else
 			sgcount=pcmd->use_sg;
     		#endif
-			
+
 		if(sgcount > ARCMSR_MAX_SG_ENTRIES) {
 			return FAILED;
 		}
@@ -1232,7 +1242,8 @@ static int arcmsr_build_ccb(struct AdapterControlBlock *acb,struct CommandContro
 
 				pdma_sg->addresshigh=address_hi;
 				pdma_sg->address=address_lo;
-				pdma_sg->length=length|cpu_to_le32(IS_SG64_ADDR);
+				pdma_sg->length=length|IS_SG64_ADDR;
+				//pdma_sg->length=length|cpu_to_le32(IS_SG64_ADDR);
 				psge +=sizeof(struct SG64ENTRY);
 				arccdbsize +=sizeof(struct SG64ENTRY);
 			}
@@ -1266,6 +1277,7 @@ static int arcmsr_build_ccb(struct AdapterControlBlock *acb,struct CommandContro
 			pdma_sg->addresshigh=address_hi;
 			pdma_sg->address=address_lo;
 	    		pdma_sg->length=pcmd->request_bufflen|IS_SG64_ADDR;
+	    		//pdma_sg->length=pcmd->request_bufflen|cpu_to_le32(IS_SG64_ADDR);
 		}
 		arcmsr_cdb->sgcount=1;
 		arcmsr_cdb->DataLength=pcmd->request_bufflen;
@@ -1296,7 +1308,7 @@ static void arcmsr_post_ccb(struct AdapterControlBlock *acb,struct CommandContro
 	ccb->startdone = ARCMSR_CCB_START;
 
 	#if ARCMSR_DEBUG
-		printk("arcmsr_post_ccb...................................");
+		printk("arcmsr_post_ccb...................................\n");
 	#endif
 
 	switch (acb->adapter_type) {
@@ -1433,13 +1445,13 @@ static struct QBUFFER __iomem  *arcmsr_get_iop_wqbuffer(struct AdapterControlBlo
 		
 	case ACB_ADAPTER_TYPE_A: {
 		struct MessageUnit_A __iomem *reg = acb->pmuA;
-		pqbuffer = (struct QBUFFER *) &reg->message_wbuffer;
+		pqbuffer = (struct QBUFFER __iomem *)&reg->message_wbuffer;
 		}
 		break;
 		
 	case ACB_ADAPTER_TYPE_B: {
 		struct MessageUnit_B  *reg = acb->pmuB;
-		pqbuffer = (struct QBUFFER __iomem *)&reg->message_wbuffer;
+		pqbuffer = (struct QBUFFER __iomem *)reg->message_wbuffer;
 		}
 		break;
 	}
@@ -1703,7 +1715,7 @@ static void arcmsr_report_ccb_state(struct AdapterControlBlock *acb, struct Comm
 			}
 			break;
 
-		case ARCMSR_DEV_ABORTED:
+		case ARCMSR_DEV_ABORTED: 
 
 		case ARCMSR_DEV_INIT_FAIL: {
 			acb->devstate[id][lun] = ARECA_RAID_GONE;
@@ -1711,16 +1723,17 @@ static void arcmsr_report_ccb_state(struct AdapterControlBlock *acb, struct Comm
 			arcmsr_ccb_complete(ccb, 1);
 			}
 			break;
-			
+
 		case ARCMSR_DEV_CHECK_CONDITION: {
 			acb->devstate[id][lun] = ARECA_RAID_GOOD;
+			ccb->pcmd->result = (DID_OK << 16 |CHECK_CONDITION << 1);
 			arcmsr_report_sense_info(ccb);
 			arcmsr_ccb_complete(ccb, 1);
 			}
 			break;
-			
+
 		default:
-			printk(KERN_NOTICE "arcmsr%d: scsi id = %d lun = %d isr get command error done, but got unknown DeviceStatus = 0x%x \n"
+			printk(KERN_EMERG "arcmsr%d: scsi id = %d lun = %d get command error done, but got unknown DeviceStatus = 0x%x \n"
 				, acb->host->host_no
 				, id
 				, lun
@@ -1738,7 +1751,6 @@ static void arcmsr_report_ccb_state(struct AdapterControlBlock *acb, struct Comm
 *******************************************************************************
 */
 static void arcmsr_drain_donequeue(struct AdapterControlBlock *acb, uint32_t flag_ccb)
-
 {
 	struct CommandControlBlock *ccb;
 	int id, lun;
@@ -1761,9 +1773,10 @@ static void arcmsr_drain_donequeue(struct AdapterControlBlock *acb, uint32_t fla
 				}
 				abortcmd->result |= DID_ABORT << 16;
 				arcmsr_ccb_complete(ccb,1);
+				printk(KERN_EMERG "arcmsr%d: ccb ='0x%p' got aborted command \n", acb->host->host_no, ccb);
 			}
 		}
-		printk(KERN_NOTICE "arcmsr%d: isr get an illegal ccb command done acb = '0x%p'"
+		printk(KERN_EMERG "arcmsr%d: get an illegal ccb command done acb = '0x%p'"
 				"ccb = '0x%p' ccbacb = '0x%p' startdone = 0x%x"
 				" ccboutstandingcount = %d \n"
 				, acb->host->host_no
@@ -1844,15 +1857,8 @@ static int arcmsr_handle_hba_isr(struct AdapterControlBlock *acb)
 	uint32_t outbound_intstatus;
 	struct MessageUnit_A __iomem *reg = acb->pmuA;
 
-    		#if ARCMSR_DEBUG
-			if (time_after(jiffies, 1*HZ + arcmsr_handle_hba_isr_prev_jiffy)){
-				arcmsr_interrupt_prev_jiffy = jiffies;
-				printk("arcmsr_handle_hba_isr...................................\n");
-				}
-    		#endif
-
 	outbound_intstatus = readl(&reg->outbound_intstatus) & acb->outbound_int_enable;
-	if(!outbound_intstatus & ARCMSR_MU_OUTBOUND_HANDLE_INT)	{
+	if(!(outbound_intstatus & ARCMSR_MU_OUTBOUND_HANDLE_INT))	{
         	return 1;
 	}
 	writel(outbound_intstatus, &reg->outbound_intstatus);
@@ -1873,12 +1879,6 @@ static int arcmsr_handle_hbb_isr(struct AdapterControlBlock *acb)
 	uint32_t outbound_doorbell;
 	struct MessageUnit_B *reg = acb->pmuB;
 
-    		#if ARCMSR_DEBUG
-			if (time_after(jiffies, 1*HZ + arcmsr_handle_hbb_isr_prev_jiffy)){
-				arcmsr_interrupt_prev_jiffy = jiffies;
-				printk("arcmsr_handle_hbb_isr...................................\n");
-				}
-    		#endif
 	outbound_doorbell = readl(reg->iop2drv_doorbell)  & acb->outbound_int_enable;
 	if(!outbound_doorbell)
 	        return 1;
@@ -1908,12 +1908,6 @@ static int arcmsr_handle_hbb_isr(struct AdapterControlBlock *acb)
     static void arcmsr_interrupt(struct AdapterControlBlock *acb)
 #endif
 	{
-    		#if ARCMSR_DEBUG
-			if (time_after(jiffies, 1*HZ + arcmsr_interrupt_prev_jiffy)){
-				arcmsr_interrupt_prev_jiffy = jiffies;
-				printk("arcmsr_interrupt...................................\n");
-				}
-    		#endif
 			
 		switch (acb->adapter_type) {
 		case ACB_ADAPTER_TYPE_A: {
@@ -1988,9 +1982,7 @@ static int arcmsr_iop_message_xfer(struct AdapterControlBlock *acb, struct scsi_
 	if (cmd->use_sg) {
 		struct scatterlist *sg = (struct scatterlist *)cmd->request_buffer;
 
-		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
-			buffer = kmap_atomic(sg_page(sg), KM_IRQ0) + sg->offset;
-		#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			buffer = kmap_atomic(sg->page, KM_IRQ0) + sg->offset;
 		#else
 			buffer = sg->address;
@@ -2011,22 +2003,17 @@ static int arcmsr_iop_message_xfer(struct AdapterControlBlock *acb, struct scsi_
 	pcmdmessagefld = (struct CMD_MESSAGE_FIELD *) buffer;
 	switch(controlcode) {
 	case ARCMSR_MESSAGE_READ_RQBUFFER: {
-			unsigned long *ver_addr;
-			//dma_addr_t buf_handle;
+			unsigned char *ver_addr;
+			//unsigned long *ver_addr;
 			uint8_t *pQbuffer, *ptmpQbuffer;
 			int32_t allxfer_len = 0;
-			//unsigned char tmp[1032];
-			//ver_addr = (unsigned long *)tmp;
-			void *tmp;
 
-			tmp = kmalloc(1032, GFP_KERNEL|GFP_DMA);
-			ver_addr = (unsigned long *)tmp;
-			//ver_addr = pci_alloc_consistent(acb->pdev, 1032, &buf_handle);
-			if (!tmp) {
+			ver_addr = kmalloc(1032, GFP_ATOMIC);
+			if (!ver_addr) {
 				retvalue = ARCMSR_MESSAGE_FAIL;
 				goto message_out;
 			}
-			ptmpQbuffer = (uint8_t *) ver_addr;
+			ptmpQbuffer = ver_addr;
 			while ((acb->rqbuf_firstindex != acb->rqbuf_lastindex)	&& (allxfer_len < 1031)) {
 				pQbuffer = &acb->rqbuffer[acb->rqbuf_firstindex];
 				memcpy(ptmpQbuffer, pQbuffer, 1);
@@ -2054,36 +2041,24 @@ static int arcmsr_iop_message_xfer(struct AdapterControlBlock *acb, struct scsi_
 				}
 				arcmsr_iop_message_read(acb);
 			}
-			memcpy(pcmdmessagefld->messagedatabuffer, (uint8_t *)ver_addr, allxfer_len);
+			memcpy(pcmdmessagefld->messagedatabuffer, ver_addr, allxfer_len);
 			pcmdmessagefld->cmdmessage.Length = allxfer_len;
 			pcmdmessagefld->cmdmessage.ReturnCode =	ARCMSR_MESSAGE_RETURNCODE_OK;
-			kfree(tmp);
-			//pci_free_consistent(acb->pdev, 1032, ver_addr, buf_handle);
+			kfree(ver_addr);
 		}
 		break;
 	case ARCMSR_MESSAGE_WRITE_WQBUFFER: {
+			//unsigned char *ver_addr;
 			unsigned long *ver_addr;
-			//dma_addr_t buf_handle;
 			int32_t	my_empty_len, user_len,	wqbuf_firstindex, wqbuf_lastindex;
 			uint8_t	*pQbuffer, *ptmpuserbuffer;
-			//unsigned char tmp[1032];
-			//ver_addr = (unsigned long *)tmp;
-	
-			//ver_addr = pci_alloc_consistent(acb->pdev, 1032, &buf_handle);
-			//if (!ver_addr) {
-			//	retvalue = ARCMSR_MESSAGE_FAIL;
-			//	goto message_out;
-			//}
-			void *tmp;
 
-			tmp = kmalloc(1032, GFP_KERNEL|GFP_DMA);
-			ver_addr = (unsigned long *)tmp;
-			//ver_addr = pci_alloc_consistent(acb->pdev, 1032, &buf_handle);
-			if (!tmp) {
+			ver_addr = kmalloc(1032, GFP_ATOMIC);
+			if (!ver_addr) {
 				retvalue = ARCMSR_MESSAGE_FAIL;
 				goto message_out;
 			}
-			ptmpuserbuffer = (uint8_t *)ver_addr;
+			ptmpuserbuffer = ver_addr;
 			user_len = pcmdmessagefld->cmdmessage.Length;
 			memcpy(ptmpuserbuffer, pcmdmessagefld->messagedatabuffer, user_len);
 			wqbuf_lastindex = acb->wqbuf_lastindex;
@@ -2122,8 +2097,7 @@ static int arcmsr_iop_message_xfer(struct AdapterControlBlock *acb, struct scsi_
 					retvalue = ARCMSR_MESSAGE_FAIL;
 				}
 			}
-			//pci_free_consistent(acb->pdev, 1032, ver_addr, buf_handle);
-			kfree(tmp);
+			kfree(ver_addr);
 		}
 		break;
 	case ARCMSR_MESSAGE_CLEAR_RQBUFFER: {
@@ -2223,10 +2197,6 @@ static struct CommandControlBlock * arcmsr_get_freeccb(struct AdapterControlBloc
 		ccb = list_entry(head->next, struct CommandControlBlock, list);
 		list_del(head->next);
 	}
-
-	#if ARCMSR_DEBUG
-		printk("arcmsr_get_freeccb finished......................................\n");
-	#endif
 	return ccb;
 }
 /*
@@ -2267,9 +2237,7 @@ static void arcmsr_handle_virtual_command(struct AdapterControlBlock *acb, struc
 
 			sg = (struct scatterlist *) cmd->request_buffer;
 			
-			#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
-				buffer = kmap_atomic(sg_page(sg), KM_IRQ0) + sg->offset;
-			#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+			#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 				buffer = kmap_atomic(sg->page, KM_IRQ0) + sg->offset;
 			#else
 				buffer = sg->address;
@@ -2326,15 +2294,8 @@ int arcmsr_queue_command(struct scsi_cmnd *cmd,void (* done)(struct scsi_cmnd *)
 	** Enlarge the timeout duration of each scsi command, it could
 	** aviod  the vibration factor with sata disk on some bad machine
 	*******************************************************
-	arcmsr_modify_timeout(cmd);
 	*/
-	#if ARCMSR_DEBUG
-    		printk("Before, ARCMSR_SD_TIMEOUT:=%d \n", ARCMSR_SD_TIMEOUT);
-	#endif
-	
-	#if ARCMSR_DEBUG
-    		printk("After, ARCMSR_SD_TIMEOUT:=%d \n", ARCMSR_SD_TIMEOUT);
-	#endif
+	//arcmsr_modify_timeout(cmd);
 	if(scsicmd==SYNCHRONIZE_CACHE) {
 		if(acb->devstate[target][lun]==ARECA_RAID_GONE) {
 	    		cmd->result=(DID_NO_CONNECT << 16);
@@ -2363,7 +2324,7 @@ int arcmsr_queue_command(struct scsi_cmnd *cmd,void (* done)(struct scsi_cmnd *)
 			return 0;
 		}
 	}
-	
+
 	if (atomic_read(&acb->ccboutstandingcount) >= ARCMSR_MAX_OUTSTANDING_CMD)
 		return SCSI_MLQUEUE_HOST_BUSY;
 
@@ -2593,12 +2554,12 @@ static void arcmsr_polling_hba_ccbdone(struct AdapterControlBlock *acb, struct C
 			}
 		}
 		ccb = (struct CommandControlBlock *)(acb->vir2phy_offset + (flag_ccb << 5));
-		poll_ccb_done = (ccb == poll_ccb) ? 1:0;
+		poll_ccb_done = ((ccb == poll_ccb)|| (poll_ccb_done == 1)) ? 1:0;
 		if ((ccb->acb != acb) || (ccb->startdone != ARCMSR_CCB_START)) {
 			if ((ccb->startdone == ARCMSR_CCB_ABORTED) || (ccb == poll_ccb)) {
 				id = ccb->pcmd->device->id;
-				lun = ccb->pcmd->device->lun; 
-				printk(KERN_NOTICE "arcmsr%d: scsi id = %d lun = %d ccb = '0x%p'"
+				lun = ccb->pcmd->device->lun;
+				printk(KERN_WARNING "arcmsr%d: scsi id = %d lun = %d ccb = '0x%p'"
 					" poll command abort successfully \n", acb->host->host_no, ccb->pcmd->device->id, ccb->pcmd->device->lun, ccb);
 				if(acb->dev_aborts[id][lun] >= 4) {
 					acb->devstate[id][lun] = ARECA_RAID_GONE;
@@ -2606,7 +2567,6 @@ static void arcmsr_polling_hba_ccbdone(struct AdapterControlBlock *acb, struct C
 				}
 			ccb->pcmd->result = DID_ABORT << 16;
 			arcmsr_ccb_complete(ccb, 1);
-			poll_ccb_done = 1;
 			continue;
 		}
 			printk(KERN_NOTICE "arcmsr%d: polling get an illegal ccb"
@@ -2617,6 +2577,7 @@ static void arcmsr_polling_hba_ccbdone(struct AdapterControlBlock *acb, struct C
 				, atomic_read(&acb->ccboutstandingcount));
 			continue;
 		}
+		else
 		arcmsr_report_ccb_state(acb, ccb, flag_ccb);
 	}
 }
@@ -2663,6 +2624,7 @@ static void arcmsr_polling_hbb_ccbdone(struct AdapterControlBlock *acb, struct C
 			reg->doneq_index = index;
 			/* check ifcommand done with no error*/
 			ccb = (struct CommandControlBlock *)(acb->vir2phy_offset+(flag_ccb << 5));/*frame must be 32 bytes aligned*/
+			poll_ccb_done = ((ccb == poll_ccb)|| (poll_ccb_done == 1)) ? 1:0;
 			if((ccb->acb!=acb) || (ccb->startdone != ARCMSR_CCB_START)) {
 				if((ccb->startdone == ARCMSR_CCB_ABORTED) || (ccb == poll_ccb)) {
 					id = ccb->pcmd->device->id;
@@ -2678,7 +2640,6 @@ static void arcmsr_polling_hbb_ccbdone(struct AdapterControlBlock *acb, struct C
 				}
 				ccb->pcmd->result = DID_ABORT << 16;
 				arcmsr_ccb_complete(ccb, 1);
-				poll_ccb_done=1;
 				continue;
 				}
 				printk(KERN_NOTICE "arcmsr%d: polling get an illegal ccb"
@@ -2689,6 +2650,7 @@ static void arcmsr_polling_hbb_ccbdone(struct AdapterControlBlock *acb, struct C
 					, atomic_read(&acb->ccboutstandingcount));
 				continue;
 			}
+			else
 			arcmsr_report_ccb_state(acb, ccb, flag_ccb);
 		}	/*drain reply FIFO*/
 }
@@ -2763,7 +2725,6 @@ static void arcmsr_done4abort_postqueue(struct AdapterControlBlock *acb)
 */	
 static void arcmsr_iop_confirm(struct AdapterControlBlock *acb)
 {
-
 	uint32_t cdb_phyaddr, ccb_phyaddr_hi32;
 	dma_addr_t dma_coherent_handle;
 	/*
@@ -2997,12 +2958,12 @@ int arcmsr_bus_reset(struct scsi_cmnd *cmd)
 	#endif
 	
 	acb=(struct AdapterControlBlock	*) cmd->device->host->hostdata;
+	acb->acb_flags |= ACB_F_BUS_RESET;
 	acb->num_resets++;
 	if((acb->num_resets > 1) && (acb->num_aborts > 10)) {
 		acb->acb_flags |= ACB_F_FIRMWARE_TRAP;
 		return SUCCESS;
 	}
-	acb->acb_flags |= ACB_F_BUS_RESET;
 	while(atomic_read(&acb->ccboutstandingcount)!=0	&& retry < 4) {
 		arcmsr_interrupt(acb);
 		retry++;
@@ -3022,7 +2983,7 @@ static void arcmsr_abort_one_cmd(struct AdapterControlBlock *acb,	struct Command
 	#if ARCMSR_DEBUG
 		printk("arcmsr_abort_one_cmd................................. \n");
 	#endif
-	ccb->startdone = ARCMSR_CCB_ABORTED;
+
 	/*
 	** Wait for 3 sec for all command done.
 	*/
@@ -3038,32 +2999,25 @@ static void arcmsr_abort_one_cmd(struct AdapterControlBlock *acb,	struct Command
 int arcmsr_abort(struct scsi_cmnd *cmd)
 {
 	struct AdapterControlBlock *acb	 = (struct AdapterControlBlock *)cmd->device->host->hostdata;
-	int i = 0,id,lun;
-	
+	int i;	
 	#if ARCMSR_DEBUG
 		printk("arcmsr_abort................................. \n");
 	#endif
 
-	id = cmd->device->id;
-	lun = cmd->device->lun;
 	acb->num_aborts++;
-	/*
-	************************************************
-	** the all interrupt service routine is locked
-	** we need to handle it	as soon as possible and	exit
-	************************************************
-	*/
+
 	if (!atomic_read(&acb->ccboutstandingcount))
 		return SUCCESS;
 	
 	for (i = 0; i <	ARCMSR_MAX_FREECCB_NUM; i++) {
 		struct CommandControlBlock *ccb = acb->pccb_pool[i];
 		if (ccb->startdone == ARCMSR_CCB_START && ccb->pcmd == cmd) {
+			ccb->startdone = ARCMSR_CCB_ABORTED;
 			arcmsr_abort_one_cmd(acb, ccb);
 			break;
 		}
 	}
-	return SUCCESS;
+		return SUCCESS;
 }
 /*
 *********************************************************************
@@ -3548,7 +3502,6 @@ int arcmsr_release(struct Scsi_Host *host)
       
       	static pci_ers_result_t arcmsr_pci_error_detected(struct pci_dev *pdev, pci_channel_state_t state)
       	{
-
 		#if ARCMSR_DEBUG
 			printk("arcmsr_pci_error_detected............................\n");
 		#endif
