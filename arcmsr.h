@@ -54,11 +54,8 @@
 **********************************************************************************
 */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
-	#define ARCMSR_MAX_OUTSTANDING_CMD				256
-	#define ARCMSR_MAX_FREECCB_NUM				320 
-#else
-	#define ARCMSR_MAX_OUTSTANDING_CMD				230
- 	#define ARCMSR_MAX_FREECCB_NUM				240 
+	#define ARCMSR_MAX_OUTSTANDING_CMD			256
+	#define ARCMSR_MAX_FREECCB_NUM			320 
 #endif
 
 #ifndef __user
@@ -68,39 +65,51 @@
 #ifndef __iomem
 	#define __iomem          
 #endif
-/*
-#ifndef _LINUX_TYPES_H
-	#ifdef __CHECKER__
-		#define __bitwise__ __attribute__((bitwise))
-	#else
-		#define __bitwise__
-	#endif
-
-	#ifdef __CHECK_ENDIAN__
-		#define __bitwise __bitwise__
-	#else
-		#define __bitwise
-	#endif
-
-	#ifndef __le32
-		typedef __u32 __bitwise __le32;
-	#endif
-#endif
-*/
 
 #ifndef __le32
 	#define __le32 uint32_t
 #endif
 
-#ifndef TRUE
-	#define TRUE 1
+#ifndef bool
+	#define bool int
 #endif
 
-#ifndef FALSE
-	#define FALSE 0
+#ifndef true
+	#define true 1 
+#endif
+#ifndef false
+	#define false 0 
 #endif
 
-
+/*
+************************************************************
+**
+************************************************************
+*/
+#if defined(__KCONF_64BIT__)||defined(_64_SYS_)
+	#define _SUPPORT_64_BIT
+#else
+	#ifdef _SUPPORT_64_BIT
+		#error Error 64_BIT CPU Macro
+	#endif
+#endif /* defined(__KCONF_64BIT__) || _64_SYS_*/
+/*
+************************************************************
+**
+************************************************************
+*/
+#if defined(_SUPPORT_64_BIT)
+	#define PtrToNum(p)		((u64)(void *)(p))
+	#define NumToPtr(ul)		((void *)((u64)ul))
+#else
+	#define PtrToNum(p)		((unsigned int)(unsigned char *)(p))
+	#define NumToPtr(ul)		((void *)((u8 *)ul))
+#endif
+/*
+************************************************************
+**
+************************************************************
+*/
 #ifndef list_for_each_entry_safe
 	#define list_for_each_entry_safe(pos, n, head, member)	\
 	for (pos = list_entry((head)->next, typeof(*pos), member),	\
@@ -108,19 +117,20 @@
 	     &pos->member != (head); 					\
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 #endif
-#define ARCMSR_DRIVER_VERSION				"Driver Version 1.20.0X.15.81103"
-#define ARCMSR_SCSI_INITIATOR_ID			255
-#define ARCMSR_MAX_XFER_SECTORS			512 /* (512*512) / 1024 = 0x0040000 (256K) */
-#define ARCMSR_MAX_XFER_SECTORS_B			4096 /* (4096*512) / 1024 = 0x0100000 (1M) */
-#define ARCMSR_MAX_TARGETID				17 /*17 max target id + 1*/
-#define ARCMSR_MAX_TARGETLUN				8 /*8*/
-#define ARCMSR_MAX_CMD_PERLUN			ARCMSR_MAX_OUTSTANDING_CMD /* ARCMSR_MAX_FREECCB_NUM  if eq. 256 will kernel panic at 2.2.x */
-#define ARCMSR_MAX_QBUFFER				4096 /* ioctl QBUFFER */
-#define ARCMSR_MAX_SG_ENTRIES				38 /* max 38*/
-#define ARCMSR_MAX_HBB_POSTQUEUE			264
-#define ARCMSR_MAX_ADAPTER				4
-#define ARCMSR_SD_TIMEOUT				90
-
+#define ARCMSR_DRIVER_VERSION			"Driver Version 1.20.0X.15.91001.896"
+#define ARCMSR_SCSI_INITIATOR_ID		255
+#define ARCMSR_MAX_XFER_SECTORS		512 /* (512*512) = 0x40000(256K) */
+#define ARCMSR_MAX_XFER_SECTORS_B		4096 /* (4096*512) = 0x200000(2M) */
+#define ARCMSR_MAX_TARGETID			17 /*17 max target id + 1*/
+#define ARCMSR_MAX_TARGETLUN			8 /*8*/
+#define ARCMSR_MAX_CMD_PERLUN		ARCMSR_MAX_OUTSTANDING_CMD /* ARCMSR_MAX_FREECCB_NUM  if eq. 256 will kernel panic at 2.2.x */
+#define ARCMSR_MAX_QBUFFER			4096 /* ioctl QBUFFER */
+#define ARCMSR_DEFAULT_SG_ENTRIES			38 /* max 38*/
+#define ARCMSR_MAX_HBB_POSTQUEUE		264
+#define ARCMSR_MAX_ADAPTER			4
+#define ARCMSR_SD_TIMEOUT			90
+#define ARCMSR_MAX_XFER_LEN			0x26000 /* 152K */
+#define ARCMSR_CDB_SG_PAGE_LENGTH		256 
 /*
 **********************************************************************************
 **
@@ -142,8 +152,6 @@
 	#define PCI_DEVICE_ID_ARECA_1260	0x1260 /* Device ID */
 	#define PCI_DEVICE_ID_ARECA_1270	0x1270 /* Device ID */
 	#define PCI_DEVICE_ID_ARECA_1280	0x1280 /* Device ID */
-	#define PCI_DEVICE_ID_ARECA_1380	0x1380 /* Device ID */
-	#define PCI_DEVICE_ID_ARECA_1381	0x1381 /* Device ID */
 	#define PCI_DEVICE_ID_ARECA_1680	0x1680 /* Device ID */
 	#define PCI_DEVICE_ID_ARECA_1681	0x1681 /* Device ID */
 #elif !defined(PCI_DEVICE_ID_ARECA_1200)
@@ -191,16 +199,16 @@
 		return virt_ptr;
 	}
 	#define pci_free_consistent(cookie, size, ptr, dma_ptr)	kfree(ptr)
-	#define pci_map_single(cookie, address, size, dir)	virt_to_bus(address)
+	#define pci_map_single(cookie, address, size, dir)		virt_to_bus(address)
 	#define pci_unmap_single(cookie, address, size, dir)
 #endif
 
 #if LINUX_VERSION_CODE >=KERNEL_VERSION(2,6,9)
-	#define arc_mdelay(msec)         msleep(msec)
-	#define arc_mdelay_int(msec)     msleep_interruptible(msec)
+	#define arc_mdelay(msec)	msleep(msec)
+	#define arc_mdelay_int(msec)	msleep_interruptible(msec)
 #else
-	#define arc_mdelay(msec)         mdelay(msec)
-	#define arc_mdelay_int(msec)     mdelay(msec)
+	#define arc_mdelay(msec)	mdelay(msec)
+	#define arc_mdelay_int(msec)	mdelay(msec)
 #endif
 
 #ifndef SA_INTERRUPT
@@ -211,14 +219,36 @@
 	#define SA_SHIRQ	IRQF_SHARED
 #endif
 
-#ifndef spin_trylock_irqsave
-		#define spin_trylock_irqsave(lock, flags) \
-		({ \
-			local_irq_save(flags); \
-			spin_trylock(lock) ? \
-			1 : ({local_irq_restore(flags); 0;}); \
-		})
-#endif /* if not spin_trylock_irqsave */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+	#define SPIN_LOCK_IRQ_CHK(acb)
+	#define SPIN_UNLOCK_IRQ_CHK(acb)
+#else
+	#define SPIN_LOCK_IRQ_CHK(acb)		spin_lock_irq(acb->host->host_lock)
+	#define SPIN_UNLOCK_IRQ_CHK(acb)	spin_unlock_irq(acb->host->host_lock)
+#endif 
+
+#ifndef roundup
+	#define roundup(x, y)   ((((x)+((y)-1))/(y))*(y))
+#endif
+/*
+**********************************************************************************
+**********************************************************************************
+*/
+typedef struct sPORT_CONFIG_R
+{
+	uint32_t cfgSignature;  // Should be 0x87974060
+	uint32_t cfgReqLen;
+ 	uint32_t cfgNumQueue;
+ 	uint32_t cfgDramSize;
+ 	uint32_t cfgIdeChannels;
+ 	uint8_t cfgVendor[40];
+ 	uint8_t cfgModel[8];
+ 	uint8_t cfgVer[16];
+ 	uint8_t cfgDeviceMap[16];
+ 	uint32_t cfgVersion;
+ 	uint8_t cfgSerial[16];
+ 	uint32_t cfgPicStatus;
+} sPORT_CONFIG_R, *pPORT_CONFIG_R;
 /*
 ************************************************************************
 **        MESSAGE CONTROL CODE
@@ -293,31 +323,19 @@ struct CMD_MESSAGE_FIELD
 **   structure for holding DMA address data 
 *************************************************************
 */
-#define IS_SG64_ADDR		0x01000000	/* bit24								*/
-struct  SG32ENTRY						/* size 8 bytes						*/
-{										/* length bit 24 == 0					*/
+#define IS_DMA64				(sizeof(dma_addr_t) == 8)
+#define IS_SG64_ADDR		0x01000000			/* bit24					*/
+struct  SG32ENTRY						/* size 8 bytes				*/
+{								/* length bit 24 == 0			*/
 	__le32					length;		/* high 8 bit == flag,low 24 bit == length	*/
 	__le32					address;
-    //uint32_t					length;		/* high 8 bit == flag,low 24 bit == length	*/
-    //uint32_t					address;
-};
-struct  SG64ENTRY						/* size 12 bytes						*/
-{                                              				/* length bit 24 == 1					*/
+}__attribute__ ((packed));
+struct  SG64ENTRY						/* size 12 bytes				*/
+{                                              					/* length bit 24 == 1			*/
 	__le32       				length;		/* high 8 bit == flag,low 24 bit == length	*/
    	__le32       				address;
    	__le32       				addresshigh;
-  	//uint32_t       			length;		/* high 8 bit == flag,low 24 bit == length	*/
-   	//uint32_t       			address;
-   	//uint32_t       			addresshigh;
-};
-struct SGENTRY_UNION
-{
-	union
-	{
-  		struct SG32ENTRY			sg32entry;   /* 30h   Scatter gather address	*/
-  		struct SG64ENTRY			sg64entry;   /* 30h                           		*/
-	}u;
-};
+}__attribute__ ((packed));
 /* 
 *************************************************************
 **
@@ -375,15 +393,18 @@ struct QBUFFER
 */
 struct FIRMWARE_INFO
 {
-	uint32_t		signature;			/*0,00-03*/
-	uint32_t		request_len;			/*1,04-07*/
-	uint32_t		numbers_queue;			/*2,08-11*/
-	uint32_t		sdram_size;			/*3,12-15*/
-	uint32_t		ide_channels;			/*4,16-19*/
-	char		vendor[40];			/*5,20-59*/
-	char		model[8];			/*15,60-67*/
-	char		firmware_ver[16];		/*17,68-83*/
-	char		device_map[16];			/*21,84-99*/
+	uint32_t		signature;		/*0,00-03*/
+	uint32_t		request_len;		/*1,04-07*/
+	uint32_t		numbers_queue;		/*2,08-11*/
+	uint32_t		sdram_size;		/*3,12-15*/
+	uint32_t		ide_channels;		/*4,16-19*/
+	uint8_t		vendor[40];		/*5,20-59*/
+	uint8_t		model[8];		/*15,60-67*/
+	uint8_t		firmware_ver[16];	/*17,68-83*/
+	uint8_t		device_map[16];		/*21,84-99*/
+	uint32_t		cfgVersion;               	/*25,100-103 Added for checking of new firmware capability*/
+	uint8_t		cfgSerial[16];           	/*26,104-119*/
+	uint32_t		cfgPicStatus;            	/*30,120-123*/
 };
 /*
 ************************************************************************************************
@@ -496,6 +517,8 @@ struct FIRMWARE_INFO
 #define ARCMSR_CCBREPLY_FLAG_ERROR				0x10000000
 /* outbound firmware ok */
 #define ARCMSR_OUTBOUND_MESG1_FIRMWARE_OK			0x80000000
+/* ARC-1680 Bus Reset*/
+#define ARCMSR_ARC1680_BUS_RESET				0x00000003
 
 /* 
 ************************************************************************
@@ -647,103 +670,182 @@ struct MessageUnit_B
 	uint32_t	__iomem	*message_wbuffer;        		/*offset 0x0000fe00:1024,1025,1026,1027,...,1151: user space data to iop 128bytes */
 	uint32_t	__iomem	*message_rbuffer;        		/*offset 0x0000ff00:1280,1281,1282,1283,...,1407: iop data to user space 128bytes */ 
 };
-
-/*
-************************************************************************************************
-**    size 0x1F8 (504)
-************************************************************************************************
-*/
-struct ARCMSR_CDB                          
-{
-	uint8_t     						Bus;              		/* 00h   should be 0            				*/
-	uint8_t     						TargetID;         		/* 01h   should be 0--15        			*/
-	uint8_t     						LUN;              		/* 02h   should be 0--7         			*/
-	uint8_t     						Function;         		/* 03h   should be 1            				*/
-
-	uint8_t     						CdbLength;        		/* 04h   not used now           			*/
-	uint8_t     						sgcount;          		/* 05h                          				*/
-	uint8_t     						Flags;            		/* 06h								*/
-#define ARCMSR_CDB_FLAG_SGL_BSIZE		0x01   		/* bit 0: 0(256) / 1(512) bytes			*/
-#define ARCMSR_CDB_FLAG_BIOS			0x02   		/* bit 1: 0(from driver) / 1(from BIOS) 	*/
-#define ARCMSR_CDB_FLAG_WRITE			0x04		/* bit 2: 0(Data in) / 1(Data out)      		*/
-#define ARCMSR_CDB_FLAG_SIMPLEQ		0x00		/* bit 4/3 ,00 : simple Q,01 : head of Q,10 : ordered Q */
-#define ARCMSR_CDB_FLAG_HEADQ		0x08
-#define ARCMSR_CDB_FLAG_ORDEREDQ		0x10
-	uint8_t     				Reserved1;        	/* 07h                             		*/
-	uint32_t     				Context;          	/* 08h   Address of this request 	*/
-	uint32_t     				DataLength;       	/* 0ch   not used now            	*/
-	uint8_t     				Cdb[16];          	/* 10h   SCSI CDB                	*/
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
 	/*
-	********************************************************
-	**Device Status : the same as SCSI bus if error occur SCSI bus status codes. 
-	**Although this is the internal record for the target device status but pratically reflect the condition.
-	********************************************************
+	************************************************************************************************
+	************************************************************************************************
 	*/
-	uint8_t     				DeviceStatus;     /* 20h   if error                */
-#define ARCMSR_DEV_SELECT_TIMEOUT               	0xF0
-#define ARCMSR_DEV_ABORTED                      	0xF1
-#define ARCMSR_DEV_INIT_FAIL                    	0xF2
-#define ARCMSR_DEV_CHECK_CONDITION	        	0x02	
-	uint8_t     						SenseData[15];    /* 21h   output                  */        
-
-	union
+	struct ARCMSR_CDB                          
 	{
-  		struct SG32ENTRY                sg32entry[ARCMSR_MAX_SG_ENTRIES];        /* 30h   Scatter gather address  */
-  		struct SG64ENTRY                sg64entry[ARCMSR_MAX_SG_ENTRIES];        /* 30h                           */
-	} u;
-};
-/*
-*********************************************************************
-**                   Command Control Block (SrbExtension)
-** CCB must be not cross page boundary,and the order from offset 0
-**         structure describing an ATA disk request
-**             this CCB length must be 32 bytes boundary
-*********************************************************************
-*/
-struct CommandControlBlock 
-{
-	struct ARCMSR_CDB		arcmsr_cdb;			/* 0-503 (size of CDB=504): arcmsr messenger scsi command descriptor size 504 bytes */
-	uint32_t                            	cdb_shifted_phyaddr;		/* 504-507 */
-	uint32_t				reserved1;			/* 508-511 */
-	#if BITS_PER_LONG == 64
-/*  ======================512+64 bytes========================  */
-	struct list_head                		list;				/* 512-527 16 bytes next/prev ptrs for ccb lists */
-	struct scsi_cmnd *              	pcmd;				/* 528-535 8 bytes pointer of linux scsi command */
-	struct AdapterControlBlock *    	acb;				/* 536-543 8 bytes pointer of acb */
-	  
-	uint16_t   		        	ccb_flags;			/* 544-545 */
-	#define				CCB_FLAG_READ			0x0000
-	#define				CCB_FLAG_WRITE		0x0001
-	#define				CCB_FLAG_ERROR		0x0002
-	#define				CCB_FLAG_FLUSHCACHE		0x0004
-	#define				CCB_FLAG_MASTER_ABORTED	0x0008
-	uint16_t                        		startdone;			/* 546-547 */
-	#define				ARCMSR_CCB_DONE   	        	0x0000
-	#define				ARCMSR_CCB_START		0x55AA
-	#define				ARCMSR_CCB_ABORTED		0xAA55
-	#define				ARCMSR_CCB_ILLEGAL		0xFFFF
-	uint32_t                        		reserved2[7];            		/* 548-551 552-555 556-559 560-563 564-567 568-571 572-575 */
-	#else
-/*  ======================512+32 bytes========================  */
-	struct list_head			list;				/* 512-519 8 bytes next/prev ptrs for ccb lists */
-	struct scsi_cmnd *		pcmd;				/* 520-523 4 bytes pointer of linux scsi command */
-	struct AdapterControlBlock *	acb;				/* 524-527 4 bytes pointer of acb */
-	  
-	uint16_t   		        	ccb_flags;			/* 528-529 */
-	#define				CCB_FLAG_READ			0x0000
-	#define				CCB_FLAG_WRITE		0x0001
-	#define				CCB_FLAG_ERROR		0x0002
-	#define				CCB_FLAG_FLUSHCACHE		0x0004
-	#define				CCB_FLAG_MASTER_ABORTED	0x0008
-	uint16_t				startdone;			/* 530-531 */
-	#define				ARCMSR_CCB_DONE		0x0000
-	#define				ARCMSR_CCB_START		0x55AA
-	#define				ARCMSR_CCB_ABORTED		0xAA55
-	#define				ARCMSR_CCB_ILLEGAL		0xFFFF
-	uint32_t                        		reserved2[3];			/* 532-535 536-539 540-543 */
-	#endif
-/*  ==========================================================  */
-};
+		uint8_t     				Bus;              		/* 00h   should be 0	*/
+		uint8_t     				TargetID;         		/* 01h   should be 0--15	*/
+		uint8_t     				LUN;              		/* 02h   should be 0--7	*/
+		uint8_t     				Function;         		/* 03h   should be 1	*/
+
+		uint8_t     				CdbLength;        		/* 04h   not used now	*/
+		uint8_t     				sgcount;          		/* 05h	no used now	*/
+		uint8_t     				Flags;            		/* 06h			*/
+		#define ARCMSR_CDB_FLAG_SGL_BSIZE			0x01   	/* bit 0: 0(256) / 1(512) bytes			*/
+		#define ARCMSR_CDB_FLAG_BIOS				0x02   	/* bit 1: 0(from driver) / 1(from BIOS)		*/
+		#define ARCMSR_CDB_FLAG_WRITE				0x04	/* bit 2: 0(Data in) / 1(Data out)      		*/
+		#define ARCMSR_CDB_FLAG_SIMPLEQ			0x00	/* bit 4/3 ,00 : simple Q,01 : head of Q,10 : ordered Q	*/
+		#define ARCMSR_CDB_FLAG_HEADQ			0x08
+		#define ARCMSR_CDB_FLAG_ORDEREDQ			0x10
+		uint8_t     				msgPages;		/* 07h	page length is 256K	*/
+		uint32_t     				Context;		/* 08h	Address of this request	*/
+		uint32_t     				DataLength;		/* 0ch	           			*/
+		uint8_t     				Cdb[16];			/* 10h	SCSI CDB                	*/
+		/*
+		********************************************************
+		**Device Status : the same as SCSI bus if error occur SCSI bus status codes. 
+		**Although this is the internal record for the target device status but pratically reflect the condition.
+		********************************************************
+		*/
+		uint8_t     				DeviceStatus;		/* 20h   if error	*/
+		#define ARCMSR_DEV_SELECT_TIMEOUT               	0xF0
+		#define ARCMSR_DEV_ABORTED                      	0xF1
+		#define ARCMSR_DEV_INIT_FAIL                    	0xF2
+		#define ARCMSR_DEV_CHECK_CONDITION	        	0x02	
+		uint8_t     				SenseData[15];		/* 21h   output	*/        
+
+		union{
+	  		struct SG32ENTRY                sg32entry[1];	/* 30h...37h 8bytes sg*/
+	  		struct SG64ENTRY                sg64entry[1];	/* 30h...3Ch 12bytes sg*/
+		}u;
+	}__attribute__ ((packed));
+	/*
+	*********************************************************************
+	** Command Control Block (SrbExtension)
+	** CCB must be not cross page boundary,and the order from offset 0
+	** structure describing an ATA disk request
+	** this CCB length must be 32 bytes boundary
+	*********************************************************************
+	*/
+	struct CommandControlBlock 
+	{	/*x32:sizeof struct_CCB=(32+60)byte, x64:sizeof struct_CCB=(64+60)byte*/
+		struct list_head			list;				/*x32: 8byte, x64: 16byte*/
+		struct scsi_cmnd			*pcmd;				/*8 bytes pointer of linux scsi command */
+		struct AdapterControlBlock    	*acb;				/*x32: 4byte, x64: 8byte*/
+		uint32_t                            	shifted_cdb_phyaddr;		/*x32: 4byte, x64: 4byte*/
+		uint16_t   		        	ccb_flags;			/*x32: 2byte, x64: 2byte*/
+		#define				CCB_FLAG_READ			0x0000
+		#define				CCB_FLAG_WRITE		0x0001
+		#define				CCB_FLAG_ERROR		0x0002
+		#define				CCB_FLAG_FLUSHCACHE		0x0004
+		#define				CCB_FLAG_MASTER_ABORTED	0x0008	
+		uint16_t                        		startdone;			/*x32:2byte,x32:2byte*/
+		#define				ARCMSR_CCB_DONE   	        	0x0000
+		#define				ARCMSR_CCB_START		0x55AA
+		#define				ARCMSR_CCB_ABORTED		0xAA55
+		#define				ARCMSR_CCB_ILLEGAL		0xFFFF
+		#if BITS_PER_LONG == 64
+		/*  ======================512+64 bytes========================  */
+			uint32_t                        	reserved[6];			/*24 byte*/
+		#else
+		/*  ======================512+32 bytes========================  */
+			uint32_t                        	reserved[2];			/*8  byte*/
+		#endif
+		/*  ==========================================================  */
+		struct ARCMSR_CDB		arcmsr_cdb;			/*this ARCMSR_CDB address must be 32 bytes boundary */ 
+	}__attribute__ ((packed));
+#else
+	/*
+	************************************************************************************************
+	**    size 0x1F8 (504)
+	************************************************************************************************
+	*/
+	struct ARCMSR_CDB                          
+	{
+		uint8_t     						Bus;              		/* 00h   should be 0	*/
+		uint8_t     						TargetID;         		/* 01h   should be 0--15	*/
+		uint8_t     						LUN;              		/* 02h   should be 0--7	*/
+		uint8_t     						Function;         		/* 03h   should be 1	*/
+
+		uint8_t     						CdbLength;        		/* 04h   not used now	*/
+		uint8_t     						sgcount;          		/* 05h			*/
+		uint8_t     						Flags;            		/* 06h			*/
+		#define ARCMSR_CDB_FLAG_SGL_BSIZE		0x01   		/* bit 0: 0(256) / 1(512) bytes			*/
+		#define ARCMSR_CDB_FLAG_BIOS			0x02   		/* bit 1: 0(from driver) / 1(from BIOS)		*/
+		#define ARCMSR_CDB_FLAG_WRITE			0x04		/* bit 2: 0(Data in) / 1(Data out)      		*/
+		#define ARCMSR_CDB_FLAG_SIMPLEQ		0x00		/* bit 4/3 ,00 : simple Q,01 : head of Q,10 : ordered Q	*/
+		#define ARCMSR_CDB_FLAG_HEADQ		0x08
+		#define ARCMSR_CDB_FLAG_ORDEREDQ		0x10
+		uint8_t     				Reserved1;        	/* 07h                             		*/
+		uint32_t     				Context;          	/* 08h   Address of this request 	*/
+		uint32_t     				DataLength;       	/* 0ch   not used now            	*/
+		uint8_t     				Cdb[16];          	/* 10h   SCSI CDB                	*/
+		/*
+		********************************************************
+		**Device Status : the same as SCSI bus if error occur SCSI bus status codes. 
+		**Although this is the internal record for the target device status but pratically reflect the condition.
+		********************************************************
+		*/
+		uint8_t     				DeviceStatus;     /* 20h   if error	*/
+		#define ARCMSR_DEV_SELECT_TIMEOUT               	0xF0
+		#define ARCMSR_DEV_ABORTED                      	0xF1
+		#define ARCMSR_DEV_INIT_FAIL                    	0xF2
+		#define ARCMSR_DEV_CHECK_CONDITION	        	0x02	
+		uint8_t     						SenseData[15];    /* 21h   output	*/        
+
+		union
+		{
+	  		struct SG32ENTRY                sg32entry[ARCMSR_DEFAULT_SG_ENTRIES];        /* 30h   Scatter gather address  */
+	  		struct SG64ENTRY                sg64entry[ARCMSR_DEFAULT_SG_ENTRIES];        /* 30h                           */
+		} u;
+	};
+	/*
+	*********************************************************************
+	** Command Control Block (SrbExtension)
+	** CCB must be not cross page boundary,and the order from offset 0
+	** structure describing an ATA disk request
+	** this CCB length must be 32 bytes boundary
+	*********************************************************************
+	*/
+	struct CommandControlBlock 
+	{
+		struct ARCMSR_CDB		arcmsr_cdb;				/* 0-503 (size of CDB=504): arcmsr messenger scsi command descriptor size 504 bytes */
+		uint32_t                            	shifted_cdb_phyaddr;			/* 504-507 */
+		uint32_t				reserved1;				/* 508-511 */
+		#if BITS_PER_LONG == 64
+		/*  ======================512+64 bytes========================  */
+			struct list_head                		list;				/* 512-527 16 bytes next/prev ptrs for ccb lists */
+		struct scsi_cmnd *              	pcmd;					/* 528-535 8 bytes pointer of linux scsi command */
+		struct AdapterControlBlock *    	acb;					/* 536-543 8 bytes pointer of acb */
+		  
+		uint16_t   		        	ccb_flags;				/* 544-545 */
+				#define				CCB_FLAG_READ			0x0000
+				#define				CCB_FLAG_WRITE		0x0001
+				#define				CCB_FLAG_ERROR		0x0002
+				#define				CCB_FLAG_FLUSHCACHE		0x0004
+				#define				CCB_FLAG_MASTER_ABORTED	0x0008
+		uint16_t                        		startdone;				/* 546-547 */
+				#define				ARCMSR_CCB_DONE   	        	0x0000
+				#define				ARCMSR_CCB_START		0x55AA
+				#define				ARCMSR_CCB_ABORTED		0xAA55
+				#define				ARCMSR_CCB_ILLEGAL		0xFFFF
+		uint32_t                        		reserved2[7];            			/* 548-551 552-555 556-559 560-563 564-567 568-571 572-575 */
+		#else
+		/*  ======================512+32 bytes========================  */
+			struct list_head			list;				/* 512-519 8 bytes next/prev ptrs for ccb lists */
+			struct scsi_cmnd *		pcmd;				/* 520-523 4 bytes pointer of linux scsi command */
+			struct AdapterControlBlock *	acb;				/* 524-527 4 bytes pointer of acb */
+			  
+			uint16_t   		        	ccb_flags;			/* 528-529 */
+				#define				CCB_FLAG_READ			0x0000
+				#define				CCB_FLAG_WRITE		0x0001
+				#define				CCB_FLAG_ERROR		0x0002
+				#define				CCB_FLAG_FLUSHCACHE		0x0004
+				#define				CCB_FLAG_MASTER_ABORTED	0x0008
+			uint16_t				startdone;			/* 530-531 */
+				#define				ARCMSR_CCB_DONE		0x0000
+				#define				ARCMSR_CCB_START		0x55AA
+				#define				ARCMSR_CCB_ABORTED		0xAA55
+				#define				ARCMSR_CCB_ILLEGAL		0xFFFF
+		uint32_t                        		reserved2[3];			/* 532-535 536-539 540-543 */
+		#endif
+	/*  ==========================================================  */
+	};
+#endif
 /*
 *********************************************************************
 **                 Adapter Control Block
@@ -760,14 +862,22 @@ struct AdapterControlBlock
 	struct Scsi_Host *				host;
 	unsigned long				vir2phy_offset;             	/* Offset is used in making arc cdb physical to virtual calculations */
 	uint32_t					outbound_int_enable;
-	
+	spinlock_t                      			host_lock;
+	spinlock_t                      			eh_lock;
+	spinlock_t                      			ccblist_lock;
+	int					current_sgcount;
+	int					max_sgcount;
+	int					max_length;
 	union {
 		struct MessageUnit_A __iomem *	pmuA;
 		struct MessageUnit_B *		pmuB;
 	};
+	void __iomem *mem_base0;
+	void __iomem *mem_base1;
 	uint8_t                   			adapter_index;
 	uint8_t           				irq;            
 	uint16_t           				acb_flags;
+	u16					dev_id;
 	#define ACB_F_SCSISTOPADAPTER			0x0001
 	#define ACB_F_MSG_STOP_BGRB			0x0002				/* stop RAID background rebuild */
 	#define ACB_F_MSG_START_BGRB			0x0004				/* stop RAID background rebuild */
@@ -776,18 +886,20 @@ struct AdapterControlBlock
 	#define ACB_F_MESSAGE_RQBUFFER_CLEARED	0x0020				/* ioctl:clear rqbuffer on the driver*/
 	#define ACB_F_MESSAGE_WQBUFFER_READED	0x0040				/* ioctl:data in wqbuffer on the IOP have been read*/
 	#define ACB_F_BUS_RESET			0x0080
-	#define ACB_F_IOP_INITED			0x0100				/* iop init */
+	#define ACB_F_IOP_INITED			0x0100/* iop init */
+	#define ACB_F_ABORT				0x0200
 	#define ACB_F_FIRMWARE_TRAP           		0x0400
 
 
 	struct CommandControlBlock *		pccb_pool[ARCMSR_MAX_FREECCB_NUM];	/* used for memory free */
 	struct list_head                			ccb_free_list;		                    	/* head of free ccb list */
 	atomic_t                        			ccboutstandingcount;
-
+	//spinlock_t                      			ccb_freelist_lock;
 	void *                          			dma_coherent;                       		/* dma_coherent used for memory free */
 	dma_addr_t				dma_coherent_handle;                		/* dma_coherent_handle used for memory free */
-
-  	uint8_t                         			rqbuffer[ARCMSR_MAX_QBUFFER];      	/* data collection buffer for read from 80331 */
+	dma_addr_t				dma_coherent_handle_hbb_mu;
+	unsigned int				uncache_size;
+	uint8_t                         			rqbuffer[ARCMSR_MAX_QBUFFER];      	/* data collection buffer for read from 80331 */
 	int32_t                         			rqbuf_firstindex;                  		/* first of read buffer  */
 	int32_t                         			rqbuf_lastindex;                   		/* last of read buffer   */
 
@@ -810,17 +922,22 @@ struct AdapterControlBlock
 	uint32_t					firm_numbers_queue;		/*2,08-11*/
 	uint32_t					firm_sdram_size;		/*3,12-15*/
 	uint32_t                        			firm_ide_channels;		/*4,16-19*/
+	uint32_t                           			firm_cfg_version;
 	char                            			firm_model[12];			/*15,60-67*/
 	char                            			firm_version[20];			/*17,68-83*/
 	char					device_map[20];			/*21,84-99*/
 	#if (ARCMSR_FW_POLLING && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
-		struct work_struct 			arcmsr_do_message_isr_bh;
+		struct work_struct 		arcmsr_do_message_isr_bh;
 		struct timer_list			eternal_timer;
-		unsigned short			fw_state;
+		unsigned short			fw_flag;
+						#define	FW_NORMAL	0x0000;
+						#define	FW_BOG		0x0001
+						#define	FW_DEADLOCK	0x0010
 		atomic_t 				rq_map_token;
-		int				ante_token_value;
+		atomic_t				ante_token_value;
 	#endif
 };
+
 /*
 *************************************************************
 *************************************************************
@@ -4989,43 +5106,23 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 			ssize_t len;
 
 			spin_lock_irqsave(acb->host->host_lock, flags);
-			if(strncmp(acb->firm_version,"V1.42",5) >= 0){
-				len = snprintf(buf, PAGE_SIZE, 
-						"=================================\n"
-						"ARCMSR: %s\n"
-						"Current commands posted:     	%4d\n"
-						"Max commands posted:         	%4d\n"
-						"Max sgl length:              		%4d\n"
-						"Max sector count:            		%4d\n"
-						"SCSI Host Resets:            		%4d\n"
-						"SCSI Aborts/Timeouts:        	%4d\n"
-						"=================================\n",
-						ARCMSR_DRIVER_VERSION,
-						atomic_read(&acb->ccboutstandingcount),
-						ARCMSR_MAX_OUTSTANDING_CMD,
-						ARCMSR_MAX_SG_ENTRIES,
-						ARCMSR_MAX_XFER_SECTORS_B,
-						acb->num_resets,
-						acb->num_aborts);
-			} else {
-				len = snprintf(buf, PAGE_SIZE, 
-						"=================================\n"
-						"ARCMSR: %s\n"
-						"Current commands posted:     	%4d\n"
-						"Max commands posted:         	%4d\n"
-						"Max sgl length:              		%4d\n"
-						"Max sector count:            		%4d\n"
-						"SCSI Host Resets:            		%4d\n"
-						"SCSI Aborts/Timeouts:        	%4d\n"
-						"=================================\n",
-						ARCMSR_DRIVER_VERSION,
-						atomic_read(&acb->ccboutstandingcount),
-						ARCMSR_MAX_OUTSTANDING_CMD,
-						ARCMSR_MAX_SG_ENTRIES,
-						ARCMSR_MAX_XFER_SECTORS,
-						acb->num_resets,
-						acb->num_aborts);
-			}
+			len = snprintf(buf, PAGE_SIZE, 
+					"=================================\n"
+					"ARCMSR: %s\n"
+					"Current commands posted:     	%4d\n"
+					"Max commands posted:         	%4d\n"
+					"Max sgl length:              		%4d\n"
+					"Max sector count:            		%4d\n"
+					"SCSI Host Resets:            		%4d\n"
+					"SCSI Aborts/Timeouts:        	%4d\n"
+					"=================================\n",
+					ARCMSR_DRIVER_VERSION,
+					atomic_read(&acb->ccboutstandingcount),
+					ARCMSR_MAX_OUTSTANDING_CMD,
+					acb->host->sg_tablesize,
+					acb->host->max_sectors,
+					acb->num_resets,
+					acb->num_aborts);
 			spin_unlock_irqrestore(acb->host->host_lock, flags);
 			return len;
 		}
@@ -5121,10 +5218,8 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 		.eh_bus_reset_handler   		= arcmsr_bus_reset,
 		.eh_host_reset_handler  		= NULL,	
      		.bios_param	            		= arcmsr_bios_param,	
-    		.can_queue	            		= ARCMSR_MAX_OUTSTANDING_CMD,
+    		.can_queue	            		= ARCMSR_MAX_FREECCB_NUM,
     		.this_id	            			= ARCMSR_SCSI_INITIATOR_ID,
-    		.sg_tablesize	        		= ARCMSR_MAX_SG_ENTRIES, 
-		.max_sectors    	    		= ARCMSR_MAX_XFER_SECTORS, 
     		.cmd_per_lun	        		= ARCMSR_MAX_CMD_PERLUN,	
      		.unchecked_isa_dma      		= 0,
 		.use_clustering	        		= ENABLE_CLUSTERING,
@@ -5152,14 +5247,14 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 		.info                   			= arcmsr_info,
 		.command                		= arcmsr_schedule_command,
     		.queuecommand	        		= arcmsr_queue_command,
-		.eh_abort_handler       		= arcmsr_abort,
+		.eh_abort_handler       		= NULL,
 		.eh_device_reset_handler		= NULL,	
-		.eh_bus_reset_handler   		= arcmsr_bus_reset,
+		.eh_bus_reset_handler   		= NULL,
 		.eh_host_reset_handler  		= NULL,	
      		.bios_param	            		= arcmsr_bios_param,	
-    		.can_queue	            		= ARCMSR_MAX_OUTSTANDING_CMD,
+    		.can_queue	            		= ARCMSR_MAX_FREECCB_NUM,
     		.this_id	            			= ARCMSR_SCSI_INITIATOR_ID,
-    		.sg_tablesize	        		= ARCMSR_MAX_SG_ENTRIES, 
+    		.sg_tablesize	        		= ARCMSR_DEFAULT_SG_ENTRIES, 
 		.max_sectors    	    		= ARCMSR_MAX_XFER_SECTORS, 
     		.cmd_per_lun	        		= ARCMSR_MAX_CMD_PERLUN,	
      		.unchecked_isa_dma      		= 0,
@@ -5190,9 +5285,9 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 		reset:                        		NULL,							\
 		slave_attach:                 		NULL,							\
 		bios_param:                   		arcmsr_bios_param,					\
-		can_queue:                    		ARCMSR_MAX_OUTSTANDING_CMD,				\
+		can_queue:                    		ARCMSR_MAX_FREECCB_NUM,				\
 		this_id:                      		ARCMSR_SCSI_INITIATOR_ID,				\
-		sg_tablesize:                 		ARCMSR_MAX_SG_ENTRIES,					\
+		sg_tablesize:                 		ARCMSR_DEFAULT_SG_ENTRIES,					\
 		cmd_per_lun:                  		ARCMSR_MAX_CMD_PERLUN,					\
 		use_new_eh_code:		1,							\
 		unchecked_isa_dma:		0,							\
