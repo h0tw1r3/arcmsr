@@ -67,6 +67,8 @@
 **     1.20.00.07    3/23/2005         Erich Chen        bug fix with arcmsr_scsi_host_template_init ocur segmentation fault,
 **                                                       if RAID adapter does not on PCI slot and modprobe/rmmod this driver twice.
 **                                                       bug fix enormous stack usage (Adrian Bunk's comment)
+**     1.20.00.08    6/23/2005         Erich Chen        bug fix with abort command,in case of heavy loading when sata cable
+**                                                       working on low quality connection
 ******************************************************************************************
 */
 #define ARCMSR_DEBUG                      1
@@ -98,15 +100,10 @@
 	#include <linux/ctype.h>
 	#include <linux/interrupt.h>
 	#include <linux/smp_lock.h>
-	#include <linux/moduleparam.h>
-	#include <linux/blkdev.h>
-	#include <linux/timer.h>
-	#include <linux/devfs_fs_kernel.h>
-	#include <linux/mc146818rtc.h>
-	#include <linux/reboot.h>
-	#include <linux/sched.h>
 	#include <linux/init.h>
 	#include <linux/spinlock.h>
+    #include <linux/reboot.h>
+    #include <linux/notifier.h>
 	#include <scsi/scsi_host.h>
     #include <scsi/scsi.h>
     #include <scsi/scsi_cmnd.h>
@@ -169,7 +166,7 @@ static struct scsi_host_template arcmsr_scsi_host_template = {
 		.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
     	.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
      	.unchecked_isa_dma      = 0,
-    	.use_clustering	        = DISABLE_CLUSTERING,
+    	.use_clustering	        = ENABLE_CLUSTERING,
 };
 /*
 **********************************************************************************
@@ -624,7 +621,6 @@ static void arcmsr_report_SenseInfoBuffer(PCCB pCCB)
 	#if ARCMSR_DEBUG0
     printk("arcmsr_report_SenseInfoBuffer...........\n");
 	#endif
-
     pcmd->result=DID_OK << 16;
     if(psenseBuffer) 
 	{
@@ -741,8 +737,6 @@ static void arcmsr_iop_reset(PACB pACB)
 			if(pCCB->startdone==ARCMSR_CCB_START)
 			{
 				pCCB->startdone=ARCMSR_CCB_ABORTED;
-				pCCB->pcmd->result=DID_ABORT << 16;
-				arcmsr_ccb_complete(pCCB);
 			}
 		}
 		/* enable all outbound interrupt */
@@ -1155,11 +1149,13 @@ static irqreturn_t arcmsr_HwInterrupt(PACB pACB)
 				{
 					pCCB->pcmd->result=DID_ABORT << 16;
 					arcmsr_ccb_complete(pCCB);
-					break;
 				}
-  				printk("arcmsr_HwInterrupt:got an illegal ccb command done ...pACB=0x%p pCCB=0x%p ccboutstandingcount=%d .....\n",pACB,pCCB,atomic_read(&pACB->ccboutstandingcount));
-				break;
-			}
+				else
+				{
+  					printk("arcmsr_HwInterrupt:got an illegal ccb command done ...acb=0x%p pCCB=0x%p ccbacb=0x%p startdone=0x%x ccboutstandingcount=%d \n",pACB,pCCB,pCCB->pACB,pCCB->startdone,atomic_read(&pACB->ccboutstandingcount));
+				}
+				continue;
+  			}
 			#if ARCMSR_DEBUG0
 			printk("pCCB=0x%p .....................done\n",pCCB);
 			#endif
@@ -1177,44 +1173,44 @@ static irqreturn_t arcmsr_HwInterrupt(PACB pACB)
 				{
 				case ARCMSR_DEV_SELECT_TIMEOUT:
 					{
-				#if ARCMSR_DEBUG0
-				printk("pCCB=0x%p ......ARCMSR_DEV_SELECT_TIMEOUT\n",pCCB);
-				#endif
+						#if ARCMSR_DEBUG0
+						printk("id=%d ......ccboutstandingcount=%d ARCMSR_DEV_SELECT_TIMEOUT\n",pCCB->pcmd->device->id,atomic_read(&pACB->ccboutstandingcount));
+						#endif
  						pCCB->pcmd->result=DID_TIME_OUT << 16;
 						arcmsr_ccb_complete(pCCB);
 					}
 					break;
 				case ARCMSR_DEV_ABORTED:
 					{
-				#if ARCMSR_DEBUG0
-				printk("pCCB=0x%p ......ARCMSR_DEV_ABORTED\n",pCCB);
-				#endif
+						#if ARCMSR_DEBUG
+						printk("id=%d ......ccboutstandingcount=%d ARCMSR_DEV_ABORTED\n",pCCB->pcmd->device->id,atomic_read(&pACB->ccboutstandingcount));
+						#endif
 						pCCB->pcmd->result=DID_NO_CONNECT << 16;
 						arcmsr_ccb_complete(pCCB);
 					}
 					break;
 				case ARCMSR_DEV_INIT_FAIL:
 					{
-				#if ARCMSR_DEBUG0
-				printk("pCCB=0x%p .....ARCMSR_DEV_INIT_FAIL\n",pCCB);
-				#endif
- 						pCCB->pcmd->result=DID_BAD_TARGET << 16;
+						#if ARCMSR_DEBUG
+						printk(" id=%d.....ccboutstandingcount=%d ARCMSR_DEV_INIT_FAIL\n",pCCB->pcmd->device->id,atomic_read(&pACB->ccboutstandingcount));
+						#endif
+						pCCB->pcmd->result=DID_BAD_TARGET << 16;
 						arcmsr_ccb_complete(pCCB);
 					}
 					break;
 				case SCSISTAT_CHECK_CONDITION:
 					{
-				#if ARCMSR_DEBUG0
-				printk("pCCB=0x%p .....SCSISTAT_CHECK_CONDITION\n",pCCB);
-				#endif
+						#if ARCMSR_DEBUG0
+						printk("id=%d .....ccboutstandingcount=%d SCSISTAT_CHECK_CONDITION\n",pCCB->pcmd->device->id,atomic_read(&pACB->ccboutstandingcount));
+						#endif
                         arcmsr_report_SenseInfoBuffer(pCCB);
 						arcmsr_ccb_complete(pCCB);
 					}
 					break;
 				default:
 					/* error occur Q all error ccb to errorccbpending Q*/
- 					printk("arcmsr_HwInterrupt:command error done ......but got unknow DeviceStatus=0x%x....\n",pCCB->arcmsr_cdb.DeviceStatus);
-					pCCB->pcmd->result=DID_PARITY << 16;/*unknow error or crc error just for retry*/
+ 					printk("arcmsr_HwInterrupt:id=%d command error done ......but got unknow DeviceStatus=0x%x....ccboutstandingcount=%d\n",pCCB->pcmd->device->id,pCCB->arcmsr_cdb.DeviceStatus,atomic_read(&pACB->ccboutstandingcount));
+					pCCB->pcmd->result=DID_NO_CONNECT << 16;/*unknow error or crc error just for retry*/
 					arcmsr_ccb_complete(pCCB);
 					break;
 				}
@@ -1225,7 +1221,7 @@ static irqreturn_t arcmsr_HwInterrupt(PACB pACB)
 	{
 		/*it must be share irq*/
 		#if ARCMSR_DEBUG0
-		printk("arcmsr_HwInterrupt..........FALSE....................share irq.....\n");
+		printk("arcmsr_HwInterrupt: ....IRQ_NONE....share irq.....outbound_intstatus=0x%x \n",outbound_intstatus);
 		#endif
         return IRQ_NONE;
 	}
@@ -1903,7 +1899,7 @@ static int arcmsr_bus_reset(struct scsi_cmnd *cmd)
 {
 	PACB pACB;
  
-	#if ARCMSR_DEBUG0
+	#if ARCMSR_DEBUG
 	printk("arcmsr_bus_reset.......................... \n");
 	#endif
 	pACB=(PACB) cmd->device->host->hostdata;
@@ -1991,8 +1987,6 @@ abort_outstanding_cmd:
 		if(pCCB->startdone==ARCMSR_CCB_START)
 		{
 			pCCB->startdone=ARCMSR_CCB_ABORTED;
-			pCCB->pcmd->result=DID_ABORT << 16;
-			arcmsr_ccb_complete(pCCB);
 		}
 	}
 	/* enable all outbound interrupt */
@@ -2010,7 +2004,7 @@ static int arcmsr_cmd_abort(struct scsi_cmnd *cmd)
 {
 	int error;
 
-    #if ARCMSR_DEBUG0
+    #if ARCMSR_DEBUG
     printk("arcmsr_cmd_abort.................. \n");
     #endif
 	error=arcmsr_seek_cmd2abort(cmd);
@@ -2164,7 +2158,6 @@ static int arcmsr_initialize(PACB pACB,struct pci_dev *pPCI_DEV)
 	if( page_remapped==NULL )
 	{
 		printk("arcmsr_initialize: memory mapping region fail............\n");
-		free_irq(pPCI_DEV->irq,pACB);
 		return(ENXIO);
 	}
 	pACB->pmu=(PMU)(page_remapped+page_offset);
@@ -2313,8 +2306,6 @@ static void arcmsr_pcidev_disattach(PACB pACB)
 			if(pCCB->startdone==ARCMSR_CCB_START)
 			{
 				pCCB->startdone=ARCMSR_CCB_ABORTED;
-				pCCB->pcmd->result=DID_ABORT << 16;
-				arcmsr_ccb_complete(pCCB);
 			}
 		}
 		/* enable all outbound interrupt */

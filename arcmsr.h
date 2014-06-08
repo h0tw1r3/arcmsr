@@ -63,7 +63,7 @@
 */
 #define ARCMSR_MAX_OUTSTANDING_CMD                                            256
 #define ARCMSR_MAX_FREECCB_NUM                                                320 
-#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.00.07"
+#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.00.08"
 #define ARCMSR_SCSI_INITIATOR_ID                                               16
 #define ARCMSR_DEV_SECTOR_SIZE                                                512
 #define ARCMSR_MAX_XFER_SECTORS                                               256
