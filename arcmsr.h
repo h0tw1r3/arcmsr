@@ -4,7 +4,7 @@
 **   FILE NAME  : arcmsr.h
 **        BY    : Erich Chen   
 **   Description: SCSI RAID Device Driver for 
-**                ARECA RAID Host adapter
+**                ARCMSR RAID Host adapter
 ***********************************************************************************************
 ** Copyright (C) 2002 - 2005, Areca Technology Corporation All rights reserved.
 **
@@ -44,26 +44,25 @@
 */
 #include <linux/config.h>
 #include <linux/version.h>
-
-#if defined(__SMP__) && !defined(CONFIG_SMP)
-    # define CONFIG_SMP
+#ifndef KERNEL_VERSION
+    #define KERNEL_VERSION(V, P, S)	(((V) << 16) + ((P) << 8) + (S))
 #endif
-/*
-*********************************************************************
-*/
-#if BITS_PER_LONG == 64
-    typedef  uint64_t                                           CPT2INT,*PCPT2INT;                                        
-#else
-    typedef  uint32_t                                           CPT2INT,*PCPT2INT;
+#if defined(__SMP__) && !defined(CONFIG_SMP)
+    #define CONFIG_SMP
 #endif
 /*
 **********************************************************************************
 **
 **********************************************************************************
 */
-#define ARCMSR_MAX_OUTSTANDING_CMD                                            256
-#define ARCMSR_MAX_FREECCB_NUM                                                320 
-#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.00.08"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
+	#define ARCMSR_MAX_OUTSTANDING_CMD                                            256
+	#define ARCMSR_MAX_FREECCB_NUM                                                320 
+#else
+	#define ARCMSR_MAX_OUTSTANDING_CMD                                            230
+	#define ARCMSR_MAX_FREECCB_NUM                                                240 
+#endif
+#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.0X.12"
 #define ARCMSR_SCSI_INITIATOR_ID                                               16
 #define ARCMSR_DEV_SECTOR_SIZE                                                512
 #define ARCMSR_MAX_XFER_SECTORS                                               256
@@ -71,22 +70,11 @@
 #define ARCMSR_MAX_TARGETID                                                    16 /*16 max target id + 1*/
 #define ARCMSR_MAX_TARGETLUN                                                    8 /*8*/
 #define ARCMSR_MAX_CHIPTYPE_NUM                                                 4
-#define ARCMSR_MAX_CMD_PERLUN                          ARCMSR_MAX_OUTSTANDING_CMD /* if eq. 256 will get kernel panic at 2.2.x */
+#define ARCMSR_MAX_CMD_PERLUN                          ARCMSR_MAX_OUTSTANDING_CMD /* if eq. 256 will kernel panic at 2.2.x */
 #define ARCMSR_MAX_DPC                                                         16 /* defer procedure call */
 #define ARCMSR_MAX_QBUFFER                                                   4096 /* ioctl QBUFFER */
 #define ARCMSR_MAX_SG_ENTRIES                                                  38 /* max 38*/
 #define ARCMSR_MAX_ADAPTER                                                      4
-/*
-**********************************************************************************
-**
-**********************************************************************************
-*/
-#define CHIP_REG_READ8(a)		                    (uint8_t)(readb((uint8_t *)(a)))
-#define CHIP_REG_READ16(a)		                   (uint16_t)(readw((uint16_t *)(a)))
-#define CHIP_REG_READ32(a)		                   (uint32_t)(readl((uint32_t *)(a)))
-#define CHIP_REG_WRITE8(a,d)		               writeb((uint8_t)(d),(uint8_t *)(a)) 
-#define CHIP_REG_WRITE16(a,d)		               writew((uint16_t)(d),(uint16_t *)(a))
-#define CHIP_REG_WRITE32(a,d)	                   writel((uint32_t)(d),(uint32_t *)(a))
 /*
 **********************************************************************************
 **
@@ -108,111 +96,49 @@
 **
 **********************************************************************************
 */
-#define dma_addr_hi32(a)           ((uint32_t) (0xffffffff & (((uint64_t)(a))>>32)))
-#define dma_addr_lo32(a)           ((uint32_t) (0xffffffff & (((uint64_t)(a)))))
+#define dma_addr_hi32(addr)               (uint32_t) ((addr>>16)>>16)
+#define dma_addr_lo32(addr)               (uint32_t) (addr & 0xffffffff)
 
-#ifndef pci_resource_start
-	# define arcget_pcicfg_base(pdev,n) pdev->base_address[n] & PCI_BASE_ADDRESS_MEM_MASK
+#ifndef DMA_64BIT_MASK
+	#define DMA_64BIT_MASK	              0xffffffffffffffffULL
+	#define DMA_32BIT_MASK	              0x00000000ffffffffULL
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,10)
+    #define arcget_pcicfg_base(pdev,n)       pci_resource_start(pdev,n)
 #else
-    # define arcget_pcicfg_base(pdev,n) pci_resource_start(pdev,n)
+	#define arcget_pcicfg_base(pdev,n)       pdev->base_address[n] & PCI_BASE_ADDRESS_MEM_MASK
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,3,30)
+
+    #if (BITS_PER_LONG == 64)
+       typedef u64 dma_addr_t;
+    #else
+       typedef u32 dma_addr_t;
+    #endif
+
+	static inline void *pci_alloc_consistent(struct pci_dev *hwdev, size_t size, dma_addr_t *dma_handle)
+	{
+		void *virt_ptr;
+
+		virt_ptr = kmalloc(size, GFP_KERNEL);
+		*dma_handle = virt_to_bus(virt_ptr);
+		return virt_ptr;
+	}
+	#define pci_free_consistent(cookie, size, ptr, dma_ptr)	kfree(ptr)
+	#define pci_map_single(cookie, address, size, dir)	virt_to_bus(address)
+	#define pci_unmap_single(cookie, address, size, dir)
+#endif
+#if LINUX_VERSION_CODE >=KERNEL_VERSION(2,6,9)
+    #define arc_mdelay(msec)         msleep(msec)
+    #define arc_mdelay_int(msec)     msleep_interruptible(msec)
+#else
+    #define arc_mdelay(msec)         mdelay(msec)
+    #define arc_mdelay_int(msec)     mdelay(msec)
 #endif
 /*
 ************************************************************************
 **        IOCTL CONTROL CODE
-** ===================
-** IOCtl definitions
-** ===================
-** Define the various device type values.  Note that values used by Microsoft
-** Corporation are in the range 0x0000 - 0x7FFF, and 0x8000 - 0xFFFF are
-** reserved for use by customers.
-**
-** #define IOCTL_SCSI_MINIPORT_IO_CONTROL  0x8001
-**
-** Macro definition for defining IOCTL and FSCTL function control codes.
-** Note that function codes 0x000 - 0x7FF are reserved for Microsoft
-** Corporation, and 0x800 - 0xFFF are reserved for customers.
-**
-** #define RETURNCODE0x0000003F   0x850
-** #define SMP_RETURN_3F          CTL_CODE(IOCTL_SCSI_MINIPORT_IO_CONTROL, RETURNCODE0x0000003F, METHOD_BUFFERED, FILE_ANY_ACCESS)
-** #define SMP_PRINT_STRING       0x80000001
-**---------------
-**  #define IOCTL_Device_Function      CTL_CODE(DeviceType, Function, Method, Access)
-**---------------
-**  _31_   _30..16_    ___15_14___    _13_    _12...2_      _1_0_
-** Common DeviceType Required Access Custom FunctionCode TransferType 
-**
-**---------------
-**DeviceType 
-**    Identifies the device type. 
-**	This value must match the value that is set in the DeviceType member of the driver's DEVICE_OBJECT structure. 
-**	(See Specifying Device Types).
-**	Values of less than 0x8000 are reserved for Microsoft. 
-**	Values of 0x8000 and higher can be used by vendors. 
-**	Note that the vendor-assigned values set the Common bit. 
-**---------------
-**FunctionCode 
-**    Identifies the function to be performed by the driver. 
-**    Values of less than 0x800 are reserved for Microsoft. 
-**	Values of 0x800 and higher can be used by vendors. 
-**	Note that the vendor-assigned values set the Custom bit. 
-**---------------
-**TransferType 
-**    Indicates how the system will pass data between the caller of DeviceIoControl
-**	(or IoBuildDeviceIoControlRequest) and the driver that handles the IRP. 
-**    Use one of the following system-defined constants: 
-**		METHOD_BUFFERED 
-**			Specifies the buffered I/O method, which is typically used for transferring small amounts of data per request. 
-**			Most I/O control codes for device and intermediate drivers use this TransferType value. 
-**			For information about how the system specifies data buffers for METHOD_BUFFERED I/O control codes, 
-**			see Buffer Descriptions for I/O Control Codes. 
-**			For more information about buffered I/O, see Using Buffered I/O. 
-**		METHOD_IN_DIRECT or METHOD_OUT_DIRECT 
-**			Specifies the direct I/O method, which is typically used for reading or writing large amounts of data, 
-**			using DMA or PIO, that must be transferred quickly. 
-**			Specify METHOD_IN_DIRECT if the caller of DeviceIoControl or IoBuildDeviceIoControlRequest will pass data to the driver. 
-**			Specify METHOD_OUT_DIRECT if the caller of DeviceIoControl or IoBuildDeviceIoControlRequest will receive data from the driver. 
-**			For information about how the system specifies data buffers for METHOD_IN_DIRECT and METHOD_OUT_DIRECT I/O control codes, 
-**			see Buffer Descriptions for I/O Control Codes. 
-**			For more information about direct I/O, see Using Direct I/O. 
-**		METHOD_NEITHER 
-**			Specifies neither buffered nor direct I/O.
-**			The I/O manager does not provide any system buffers or MDLs. 
-**			The IRP supplies the user-mode virtual addresses of the input and output buffers 
-**			that were specified to DeviceIoControl or IoBuildDeviceIoControlRequest,without validating or mapping them. 
-**			For information about how the system specifies data buffers for METHOD_NEITHER I/O control codes, 
-**			see Buffer Descriptions for I/O Control Codes. 
-**			This method can be used only if the driver can be guaranteed to be running in the context 
-**			of the thread that originated the I/O control request. 
-**			Only a highest-level kernel-mode driver is guaranteed to meet this condition, 
-**			so METHOD_NEITHER is seldom used for the I/O control codes that are passed to low-level device drivers. 
-**			With this method, the highest-level driver must determine whether to set up buffered 
-**			or direct access to user data on receipt of the request, 
-**			possibly must lock down the user buffer, 
-**			and must wrap its access to the user buffer in a structured exception handler (see Handling Exceptions). 
-**			Otherwise, the originating user-mode caller might change the buffered data before the driver can use it,
-**			or the caller could be swapped out just as the driver is accessing the user buffer. 
-**			For more information, see Using Neither Buffered Nor Direct I/O. 
-**-------------------
-**RequiredAccess 
-**    Indicates the type of access that a caller must request 
-**	when opening the file object that represents the device (see IRP_MJ_CREATE). 
-**	The I/O Manager will create IRPs and call the driver with a particular I/O control code 
-**	only if the caller has requested the specified access rights. 
-**	RequiredAccess is specified by using the following system-defined constants: 
-**	FILE_ANY_ACCESS 
-**	    The I/O Manager sends the IRP for any caller that has a handle to the file object 
-**		that represents the target device object. 
-**	FILE_READ_DATA 
-**	    The I/O Manager sends the IRP only for a caller with read access rights, 
-**		allowing the underlying device driver to transfer data from the device to system memory. 
-**	FILE_WRITE_DATA 
-**	    The I/O Manager sends the IRP only for a caller with write access rights, 
-**		allowing the underlying device driver to transfer data from system memory to its device. 
-**	FILE_READ_DATA and FILE_WRITE_DATA can be OR'ed together 
-**	    if the caller must have both read and write access rights.
-**        Some system-defined I/O control codes have a RequiredAccess value of FILE_ANY_ACCESS. 
-**		This is especially true for I/O control codes that are sent to drivers of exclusive devices,
-**		and for those that specify buffered I/O. 
 ************************************************************************
 */
 typedef struct _CMD_IO_CONTROL
@@ -256,6 +182,8 @@ typedef struct _CMD_IOCTL_FIELD
 #define FUNCTION_CLEAR_ALLQBUFFER            	0x0805
 #define FUNCTION_RETURN_CODE_3F              	0x0806
 #define FUNCTION_SAY_HELLO                   	0x0807
+#define FUNCTION_SAY_GOODBYE                    0x0808
+#define FUNCTION_FLUSH_ADAPTER_CACHE           	0x0809
 /* ARECA IO CONTROL CODE*/
 #define ARCMSR_IOCTL_READ_RQBUFFER           	ARECA_SATA_RAID | FUNCTION_READ_RQBUFFER
 #define ARCMSR_IOCTL_WRITE_WQBUFFER          	ARECA_SATA_RAID | FUNCTION_WRITE_WQBUFFER
@@ -264,6 +192,8 @@ typedef struct _CMD_IOCTL_FIELD
 #define ARCMSR_IOCTL_CLEAR_ALLQBUFFER        	ARECA_SATA_RAID | FUNCTION_CLEAR_ALLQBUFFER
 #define ARCMSR_IOCTL_RETURN_CODE_3F          	ARECA_SATA_RAID | FUNCTION_RETURN_CODE_3F
 #define ARCMSR_IOCTL_SAY_HELLO               	ARECA_SATA_RAID | FUNCTION_SAY_HELLO
+#define ARCMSR_IOCTL_SAY_GOODBYE                ARECA_SATA_RAID | FUNCTION_SAY_GOODBYE
+#define ARCMSR_IOCTL_FLUSH_ADAPTER_CACHE        ARECA_SATA_RAID | FUNCTION_FLUSH_ADAPTER_CACHE
 /* ARECA IOCTL ReturnCode */
 #define ARCMSR_IOCTL_RETURNCODE_OK              0x00000001
 #define ARCMSR_IOCTL_RETURNCODE_ERROR           0x00000006
@@ -276,8 +206,8 @@ typedef struct _CMD_IOCTL_FIELD
 #define IS_SG64_ADDR                0x01000000 /* bit24 */
 typedef struct  _SG32ENTRY                             /* size 8 bytes */
 {                                              /* length bit 24 == 0                      */
-    uint32_t						length;    /* high 8 bit == flag,low 24 bit == length */
-    uint32_t						address;
+    uint32_t							length;    /* high 8 bit == flag,low 24 bit == length */
+    uint32_t							address;
 }SG32ENTRY,*PSG32ENTRY;
 typedef struct  _SG64ENTRY                             /* size 12 bytes */
 {                                              /* length bit 24 == 1                      */
@@ -292,15 +222,19 @@ typedef struct _SGENTRY_UNION
   		SG32ENTRY                   sg32entry;   /* 30h   Scatter gather address  */
   		SG64ENTRY                   sg64entry;   /* 30h                           */
 	}u;
-}SGENTRY_UNION,PSGENTRY_UNION;
-/*
-**struct scatterlist
-**{
-**    char *  address;     // Location data is to be transferred to
-**    char *  alt_address; // Location of actual if address is a dma indirect buffer.  NULL otherwise 
-**    unsigned int length;
-**};
+}SGENTRY_UNION,*PSGENTRY_UNION;
+/* 
+*************************************************************
+**
+*************************************************************
 */
+typedef struct _ARCMSR_PCIINFO
+{
+	uint16_t 							vendor_id;
+	uint16_t 							device_id;
+    uint16_t 							irq;
+    uint16_t  						    reserved;
+}ARCMSR_PCIINFO,*PARCMSR_PCIINFO; 
 /*
 **********************************
 **  Inquiry Data format
@@ -336,9 +270,26 @@ typedef struct _SGENTRY_UNION
 */
 typedef struct _QBUFFER
 {
-	uint32_t      data_len;
-    uint8_t       data[124];
+	uint32_t     data_len;
+    uint8_t      data[124];
 }QBUFFER,*PQBUFFER;
+/*
+************************************************************************************************
+**      FIRMWARE INFO
+************************************************************************************************
+*/
+typedef struct _FIRMWARE_INFO
+{
+	uint32_t      signature;                /*0,00-03*/
+	uint32_t      request_len;              /*1,04-07*/
+	uint32_t      numbers_queue;            /*2,08-11*/
+	uint32_t      sdram_size;               /*3,12-15*/
+	uint32_t      ide_channels;             /*4,16-19*/
+	char          vendor[40];               /*5,20-59*/
+	char          model[8];                 /*15,60-67*/
+	char          firmware_ver[16];         /*17,68-83*/
+	char          device_map[16];           /*21,84-99*/
+}FIRMWARE_INFO,*PFIRMWARE_INFO;
 /*
 ************************************************************************************************
 **                            ARECA FIRMWARE SPEC
@@ -354,8 +305,8 @@ typedef struct _QBUFFER
 **		3. Index Memory Usage
 **			offset 0xf00 : for RS232 out (request buffer)
 **			offset 0xe00 : for RS232 in  (scratch buffer)
-**			offset 0xa00 : for inbound message code message_wbuffer (driver to IOP331)
-**			offset 0x800 : for outbound message code  message_rbuffer (IOP331 to driver)
+**			offset 0xa00 : for inbound message code message_rwbuffer (driver to IOP331)
+**			offset 0xa00 : for outbound message code  message_rwbuffer (IOP331 to driver)
 **		4. RS-232 emulation
 **			Currently 128 byte buffer is used
 **			          1st uint32_t : Data length (1--124)
@@ -394,7 +345,7 @@ typedef struct _QBUFFER
 **		8. Message1 Out - Diag Status Code (????)
 **		9. Message0 message code :
 **			0x00 : NOP
-**			0x01 : Get Config ->offset 0xa00 :for outbound message code  message_rbuffer (IOP331 to driver)
+**			0x01 : Get Config ->offset 0xa00 :for outbound message code  message_rwbuffer (IOP331 to driver)
 **												Signature       0x87974060(4)
 **												Request len     0x00000200(4)
 **												# of queue      0x00000100(4)
@@ -405,7 +356,7 @@ typedef struct _QBUFFER
 **												FirmVer         16 bytes char
 **                          					Device Map      16 Bytes
 **                          					FirmwareVersion DWORD <== Added for checking of new firmware capability
-**			0x02 : Set Config ->offset 0xa00 : for inbound message code message_wbuffer (driver to IOP331)
+**			0x02 : Set Config ->offset 0xa00 : for inbound message code message_rwbuffer (driver to IOP331)
 **												Signature       0x87974063(4)
 **												UPPER32 of Request Frame  (4)-->Driver Only
 **			0x03 : Reset (Abort all queued Command)
@@ -413,7 +364,7 @@ typedef struct _QBUFFER
 **			0x05 : Flush Cache
 **			0x06 : Start Background Activity (re-start if background is halted)
 **			0x07 : Check If Host Command Pending (Novell May Need This Function)
-**			0x08 : Set controller time ->offset 0xa00 : for inbound message code message_wbuffer (driver to IOP331)
+**			0x08 : Set controller time ->offset 0xa00 : for inbound message code message_rwbuffer (driver to IOP331)
 **			        							byte 0 : 0xaa <-- signature
 **                          					byte 1 : 0x55 <-- signature
 **			        							byte 2 : year (04)
@@ -424,6 +375,9 @@ typedef struct _QBUFFER
 **			        							byte 7 : second (0..59)
 ************************************************************************************************
 */
+/* signature of set and get firmware config */
+#define ARCMSR_SIGNATURE_GET_CONFIG                   0x87974060
+#define ARCMSR_SIGNATURE_SET_CONFIG                   0x87974063
 /* message code of inbound message register */
 #define ARCMSR_INBOUND_MESG0_NOP                      0x00000000
 #define ARCMSR_INBOUND_MESG0_GET_CONFIG               0x00000001
@@ -469,8 +423,8 @@ typedef struct _ARCMSR_CDB
 #define ARCMSR_CDB_FLAG_ORDEREDQ           0x10
 	uint8_t     						Reserved1;        /* 07h                             */
 
-	uint32_t     					    Context;          /* 08h   Address of this request */
-	uint32_t     					    DataLength;       /* 0ch   not used now            */
+	uint32_t     						Context;          /* 08h   Address of this request */
+	uint32_t     						DataLength;       /* 0ch   not used now            */
 
 	uint8_t     						Cdb[16];          /* 10h   SCSI CDB                */
 	/*
@@ -502,149 +456,6 @@ typedef struct _ARCMSR_CDB
 	} u;
 }ARCMSR_CDB,*PARCMSR_CDB;
 /*
-******************************************************************************************************
-**                 Messaging Unit (MU) of the Intel R 80331 I/O processor (80331)
-**  ==================================================================================================
-**	The Messaging Unit (MU) transfers data between the PCI system and the 80331 
-**  notifies the respective system when new data arrives.
-**	The PCI window for messaging transactions is always the first 4 Kbytes of the inbound translation.
-**	window defined by: 
-**                    1.Inbound ATU Base Address Register 0 (IABAR0) 
-**                    2.Inbound ATU Limit Register 0 (IALR0)
-**	All of the Messaging Unit errors are reported in the same manner as ATU errors. 
-**  Error conditions and status can be found in :
-**                                               1.ATUSR 
-**                                               2.ATUISR
-**====================================================================================================
-**     Mechanism        Quantity               Assert PCI Interrupt Signals      Generate I/O Processor Interrupt
-**----------------------------------------------------------------------------------------------------
-**  Message Registers      2 Inbound                   Optional                              Optional
-**                         2 Outbound                
-**----------------------------------------------------------------------------------------------------
-**  Doorbell Registers     1 Inbound                   Optional                              Optional
-**                         1 Outbound  
-**----------------------------------------------------------------------------------------------------
-**  Circular Queues        4 Circular Queues           Under certain conditions              Under certain conditions
-**----------------------------------------------------------------------------------------------------
-**  Index Registers     1004 32-bit Memory Locations   No                                    Optional
-**====================================================================================================
-**     PCI Memory Map: First 4 Kbytes of the ATU Inbound PCI Address Space
-**====================================================================================================
-**  0000H           Reserved
-**  0004H           Reserved
-**  0008H           Reserved
-**  000CH           Reserved
-**------------------------------------------------------------------------
-**  0010H 			Inbound Message Register 0              ]
-**  0014H 			Inbound Message Register 1              ]
-**  0018H 			Outbound Message Register 0             ]
-**  001CH 			Outbound Message Register 1             ]   4 Message Registers
-**------------------------------------------------------------------------
-**  0020H 			Inbound Doorbell Register               ]
-**  0024H 			Inbound Interrupt Status Register       ]
-**  0028H 			Inbound Interrupt Mask Register         ]
-**  002CH 			Outbound Doorbell Register              ]
-**  0030H 			Outbound Interrupt Status Register      ]
-**  0034H 			Outbound Interrupt Mask Register        ]   2 Doorbell Registers and 4 Interrupt Registers
-**------------------------------------------------------------------------
-**  0038H 			Reserved
-**  003CH 			Reserved
-**------------------------------------------------------------------------
-**  0040H 			Inbound Queue Port                      ]
-**  0044H 			Outbound Queue Port                     ]   2 Queue Ports
-**------------------------------------------------------------------------
-**  0048H 			Reserved
-**  004CH 			Reserved
-**------------------------------------------------------------------------
-**  0050H                                                   ]
-**    :                                                     ]
-**    :      Intel Xscale Microarchitecture Local Memory    ]
-**    :                                                     ]
-**  0FFCH                                                   ]   1004 Index Registers
-*******************************************************************************
-*/
-typedef struct _MU
-{
-	uint32_t								resrved0[4];	            /*0000 000F*/
-	uint32_t								inbound_msgaddr0;	        /*0010 0013*/
-	uint32_t								inbound_msgaddr1;	        /*0014 0017*/
-	uint32_t								outbound_msgaddr0;	        /*0018 001B*/
-	uint32_t								outbound_msgaddr1;	        /*001C 001F*/
-	uint32_t								inbound_doorbell;	        /*0020 0023*/
-	uint32_t								inbound_intstatus;	        /*0024 0027*/
-	uint32_t								inbound_intmask;	        /*0028 002B*/
-	uint32_t								outbound_doorbell;	        /*002C 002F*/
-	uint32_t								outbound_intstatus;	        /*0030 0033*/
-	uint32_t								outbound_intmask;	        /*0034 0037*/
-	uint32_t								reserved1[2];	            /*0038 003F*/
-	uint32_t								inbound_queueport;	        /*0040 0043*/
-	uint32_t								outbound_queueport;     	/*0044 0047*/
-	uint32_t								reserved2[2];	            /*0048 004F*/
-	uint32_t                                reserved3[492];             /*0050 07FF ......local_buffer 492*/
-	uint32_t                                message_rbuffer[128];       /*0800 09FF                    128*/
-	uint32_t                                message_wbuffer[256];       /*0a00 0DFF                    256*/
-	uint32_t                                ioctl_wbuffer[32];          /*0E00 0E7F                     32*/
-    uint32_t                                reserved4[32];              /*0E80 0EFF                     32*/
-	uint32_t                                ioctl_rbuffer[32];          /*0F00 0F7F                     32*/
-	uint32_t                                reserved5[32];              /*0F80 0FFF                     32*/
-}MU,*PMU;
-/*
-*********************************************************************
-**                 Adapter Control Block
-** 
-*********************************************************************
-*/
-typedef struct _ACB
-{
-    struct pci_dev *                pPCI_DEV;
-    struct Scsi_Host *			    pScsiHost;
-	#if BITS_PER_LONG == 64
-		uint64_t                         vir2phy_offset;                    /* Offset is used in making arc cdb physical to virtual calculations */
-	#else
-		uint32_t                         vir2phy_offset;                    /* Offset is used in making arc cdb physical to virtual calculations */
-	#endif
-    uint32_t                        outbound_int_enable;
-
-	struct _MU *                    pmu;                                    /* message unit ATU inbound base address0 */
-
-	uint8_t                   		adapter_index;                          /*  */
-	uint8_t           				irq;            
-	uint16_t           				acb_flags;                              /*  */
-#define ACB_F_SCSISTOPADAPTER         0x0001
-#define ACB_F_MSG_STOP_BGRB           0x0002                    			/* stop RAID background rebuild */
-#define ACB_F_MSG_START_BGRB          0x0004                    			/* stop RAID background rebuild */
-#define ACB_F_IOPDATA_OVERFLOW        0x0008                    			/* iop ioctl data rqbuffer overflow */
-#define ACB_F_IOCTL_WQBUFFER_CLEARED  0x0010                    			/* ioctl clear wqbuffer */
-#define ACB_F_IOCTL_RQBUFFER_CLEARED  0x0020                    			/* ioctl clear rqbuffer */
-#define ACB_F_IOCTL_OPEN              0x0040
-#define ACB_F_IOP_INITED              0x0080                    			/* iop init */
-
-    struct _CCB *                   pccbwait2go[ARCMSR_MAX_OUTSTANDING_CMD];
-	atomic_t                        ccbwait2gocount;
-    atomic_t                        ccboutstandingcount;
-
-    void *                          dma_coherent;                           /* dma_coherent used for memory free */
-    dma_addr_t                      dma_coherent_handle;                    /* dma_coherent_handle used for memory free */
-	struct _CCB *                   pccb_pool[ARCMSR_MAX_FREECCB_NUM];      /* serial ccb pointer array */
- 	struct _CCB *                   pccbringQ[ARCMSR_MAX_FREECCB_NUM];      /* working ccb pointer array */
-  	int32_t                         ccb_doneindex;                          /* done ccb array index */
-    int32_t                         ccb_startindex;                         /* start ccb array index  */
-  
-  	uint8_t                         rqbuffer[ARCMSR_MAX_QBUFFER];           /* data collection buffer for read from 80331 */
-	int32_t                         rqbuf_firstindex;                       /* first of read buffer  */
-    int32_t                         rqbuf_lastindex;                        /* last of read buffer   */
-
-    uint8_t                         wqbuffer[ARCMSR_MAX_QBUFFER];           /* data collection buffer for write to 80331  */
-	int32_t                         wqbuf_firstindex;                       /* first of write buffer */
-    int32_t                         wqbuf_lastindex;                        /* last of write buffer  */
-
-    spinlock_t                      isr_lockunlock;
-    spinlock_t                      wait2go_lockunlock;
-    spinlock_t                      qbuffer_lockunlock;
-	spinlock_t                      ccb_doneindex_lockunlock;
-    spinlock_t                      ccb_startindex_lockunlock;
-}ACB,*PACB;/* HW_DEVICE_EXTENSION */
-/*
 *********************************************************************
 **                   Command Control Block (SrbExtension)
 ** CCB must be not cross page boundary,and the order from offset 0
@@ -654,45 +465,108 @@ typedef struct _ACB
 */
 typedef struct _CCB 
 {
-	struct _ARCMSR_CDB               arcmsr_cdb;              /* 0-503 (size of CDB=504): arcmsr messenger scsi command descriptor size 504 bytes */
-	uint32_t                         cdb_shifted_phyaddr;     /* 504-507 */
-	uint32_t                         reserved1;               /* 508-511 */
+	ARCMSR_CDB          		       arcmsr_cdb;              /* 0-503 (size of CDB=504): arcmsr messenger scsi command descriptor size 504 bytes */
+	uint32_t                           cdb_shifted_phyaddr;     /* 504-507 */
+	uint32_t                           reserved1;               /* 508-511 */
 	/*  ======================512+32 bytes========================  */
 #if BITS_PER_LONG == 64
-		struct scsi_cmnd 	           *pcmd;                    /* 512-515 516-519 pointer of linux scsi command */
-		struct _ACB                    *pACB;                    /* 520-523 524-527 */
+		struct scsi_cmnd * 	                    pcmd;                    /* 512-515 516-519 pointer of linux scsi command */
+		struct _ACB *                           pACB;                    /* 520-523 524-27 */
 	  
-		uint16_t   		        		ccb_flags;               /* 528-529 */
+		uint16_t   		        		  ccb_flags;               /* 528-529 */
 	#define		CCB_FLAG_READ		        0x0000
 	#define		CCB_FLAG_WRITE		        0x0001
 	#define		CCB_FLAG_ERROR		        0x0002
 	#define		CCB_FLAG_FLUSHCACHE	        0x0004
 	#define		CCB_FLAG_MASTER_ABORTED     0x0008
-		uint16_t                        startdone;               /* 530-531 */
+		uint16_t                          startdone;               /* 530-531 */
 	#define		ARCMSR_CCB_DONE   	        0x0000
 	#define		ARCMSR_CCB_START   	        0x55AA
 	#define		ARCMSR_CCB_ABORTED	        0xAA55
 	#define		ARCMSR_CCB_ILLEGAL	        0xFFFF
-		uint32_t                        reserved2[3];            /* 532-535 536-539 540-543 */
+		uint32_t                          reserved2[3];            /* 532-535 536-539 540-543 */
 #else
-		struct scsi_cmnd 	           *pcmd;                    /* 512-515 pointer of linux scsi command */
-		struct _ACB                    *pACB;                    /* 516-519 */
+		struct scsi_cmnd * 	                    pcmd;                    /* 512-515 pointer of linux scsi command */
+		struct _ACB *                           pACB;                    /* 516-519 */
 	  
-		uint16_t   		        		ccb_flags;               /* 520-521 */
+		uint16_t   		        		  ccb_flags;               /* 520-521 */
 	#define		CCB_FLAG_READ		        0x0000
 	#define		CCB_FLAG_WRITE		        0x0001
 	#define		CCB_FLAG_ERROR		        0x0002
 	#define		CCB_FLAG_FLUSHCACHE	        0x0004
 	#define		CCB_FLAG_MASTER_ABORTED     0x0008
-		uint16_t                        startdone;               /* 522-523 */
+		uint16_t                          startdone;               /* 522-523 */
 	#define		ARCMSR_CCB_DONE   	        0x0000
 	#define		ARCMSR_CCB_START   	        0x55AA
 	#define		ARCMSR_CCB_ABORTED	        0xAA55
 	#define		ARCMSR_CCB_ILLEGAL	        0xFFFF
-		uint32_t                        reserved2[5];            /* 524-527 528-531 532-535 536-539 540-543 */
+		uint32_t                          reserved2[5];            /* 524-527 528-531 532-535 536-539 540-543 */
 #endif
     /*  ==========================================================  */
 }CCB,*PCCB;
+/*
+*********************************************************************
+**                 Adapter Control Block
+** 
+*********************************************************************
+*/
+typedef struct _ACB
+{
+    struct pci_dev *                pPCI_DEV;
+    struct Scsi_Host *		        host;
+	unsigned long                   vir2phy_offset;             	/* Offset is used in making arc cdb physical to virtual calculations */
+    uint32_t                        outbound_int_enable;
+
+	struct _MU *                    pmu;                             	/* message unit ATU inbound base address0 */
+
+	uint8_t                   		adapter_index;                   	/*  */
+	uint8_t           				irq;            
+	uint16_t           				acb_flags;                       	/*  */
+#define ACB_F_SCSISTOPADAPTER         0x0001
+#define ACB_F_MSG_STOP_BGRB           0x0002                    		/* stop RAID background rebuild */
+#define ACB_F_MSG_START_BGRB          0x0004                    		/* stop RAID background rebuild */
+#define ACB_F_IOPDATA_OVERFLOW        0x0008                    		/* iop ioctl data rqbuffer overflow */
+#define ACB_F_IOCTL_WQBUFFER_CLEARED  0x0010                    		/* ioctl clear wqbuffer */
+#define ACB_F_IOCTL_RQBUFFER_CLEARED  0x0020                    		/* ioctl clear rqbuffer */
+#define ACB_F_BUS_RESET               0x0040
+#define ACB_F_IOP_INITED              0x0080                    		/* iop init */
+
+    struct _CCB *                   pccbwait2go[ARCMSR_MAX_OUTSTANDING_CMD];
+	atomic_t                        ccbwait2gocount;
+    atomic_t                        ccboutstandingcount;
+
+    void *                          dma_coherent;                       /* dma_coherent used for memory free */
+    dma_addr_t                      dma_coherent_handle;                /* dma_coherent_handle used for memory free */
+	struct _CCB *                   pccb_pool[ARCMSR_MAX_FREECCB_NUM];  /* used for memory free */
+ 	struct _CCB *                   pccbringQ[ARCMSR_MAX_FREECCB_NUM]; 	/* ccb pointer array */
+  	int32_t                         ccb_doneindex;                     	/* done ccb array index */
+    int32_t                         ccb_startindex;                    	/* start ccb array index  */
+  
+  	uint8_t                         rqbuffer[ARCMSR_MAX_QBUFFER];      	/* data collection buffer for read from 80331 */
+	int32_t                         rqbuf_firstindex;                  	/* first of read buffer  */
+    int32_t                         rqbuf_lastindex;                   	/* last of read buffer   */
+
+    uint8_t                         wqbuffer[ARCMSR_MAX_QBUFFER];      	/* data collection buffer for write to 80331  */
+	int32_t                         wqbuf_firstindex;                  	/* first of write buffer */
+    int32_t                         wqbuf_lastindex;                   	/* last of write buffer  */
+
+    spinlock_t                      isr_lockunlock;
+    spinlock_t                      wait2go_lockunlock;
+    spinlock_t                      qbuffer_lockunlock;
+	spinlock_t                      ccb_doneindex_lockunlock;
+    spinlock_t                      ccb_startindex_lockunlock;
+	uint8_t                         devstate[ARCMSR_MAX_TARGETID][ARCMSR_MAX_TARGETLUN]; /* id0 ..... id15,lun0...lun7 */
+#define ARECA_RAID_GONE               0x55
+#define ARECA_RAID_GOOD               0xaa
+	uint32_t		                num_resets;
+	uint32_t	            	    num_aborts;
+	uint32_t                        firm_request_len;                       /*1,04-07*/
+	uint32_t                        firm_numbers_queue;                     /*2,08-11*/
+	uint32_t                        firm_sdram_size;                        /*3,12-15*/
+	uint32_t                        firm_ide_channels;                      /*4,16-19*/
+	char                            firm_model[12];	                        /*15,60-67*/
+	char                            firm_version[20];          
+}ACB,*PACB;
 /*
 *********************************************************************
 ** 
@@ -703,7 +577,7 @@ typedef struct _HCBARC
 	struct _ACB *              		pACB[ARCMSR_MAX_ADAPTER]; 
 
     int32_t                         arcmsr_major_number;
-	
+
 	uint8_t                     	adapterCnt;
 	uint8_t                     	reserved[3];    
 }HCBARC,*PHCBARC;
@@ -3594,7 +3468,93 @@ typedef struct _SENSE_DATA
 */
 
 
-
+/*
+******************************************************************************************************
+**                 Messaging Unit (MU) of the Intel R 80331 I/O processor (80331)
+**  ==================================================================================================
+**	The Messaging Unit (MU) transfers data between the PCI system and the 80331 
+**  notifies the respective system when new data arrives.
+**	The PCI window for messaging transactions is always the first 4 Kbytes of the inbound translation.
+**	window defined by: 
+**                    1.Inbound ATU Base Address Register 0 (IABAR0) 
+**                    2.Inbound ATU Limit Register 0 (IALR0)
+**	All of the Messaging Unit errors are reported in the same manner as ATU errors. 
+**  Error conditions and status can be found in :
+**                                               1.ATUSR 
+**                                               2.ATUISR
+**====================================================================================================
+**     Mechanism        Quantity               Assert PCI Interrupt Signals      Generate I/O Processor Interrupt
+**----------------------------------------------------------------------------------------------------
+**  Message Registers      2 Inbound                   Optional                              Optional
+**                         2 Outbound                
+**----------------------------------------------------------------------------------------------------
+**  Doorbell Registers     1 Inbound                   Optional                              Optional
+**                         1 Outbound  
+**----------------------------------------------------------------------------------------------------
+**  Circular Queues        4 Circular Queues           Under certain conditions              Under certain conditions
+**----------------------------------------------------------------------------------------------------
+**  Index Registers     1004 32-bit Memory Locations   No                                    Optional
+**====================================================================================================
+**     PCI Memory Map: First 4 Kbytes of the ATU Inbound PCI Address Space
+**====================================================================================================
+**  0000H           Reserved
+**  0004H           Reserved
+**  0008H           Reserved
+**  000CH           Reserved
+**------------------------------------------------------------------------
+**  0010H 			Inbound Message Register 0              ]
+**  0014H 			Inbound Message Register 1              ]
+**  0018H 			Outbound Message Register 0             ]
+**  001CH 			Outbound Message Register 1             ]   4 Message Registers
+**------------------------------------------------------------------------
+**  0020H 			Inbound Doorbell Register               ]
+**  0024H 			Inbound Interrupt Status Register       ]
+**  0028H 			Inbound Interrupt Mask Register         ]
+**  002CH 			Outbound Doorbell Register              ]
+**  0030H 			Outbound Interrupt Status Register      ]
+**  0034H 			Outbound Interrupt Mask Register        ]   2 Doorbell Registers and 4 Interrupt Registers
+**------------------------------------------------------------------------
+**  0038H 			Reserved
+**  003CH 			Reserved
+**------------------------------------------------------------------------
+**  0040H 			Inbound Queue Port                      ]
+**  0044H 			Outbound Queue Port                     ]   2 Queue Ports
+**------------------------------------------------------------------------
+**  0048H 			Reserved
+**  004CH 			Reserved
+**------------------------------------------------------------------------
+**  0050H                                                   ]
+**    :                                                     ]
+**    :      Intel Xscale Microarchitecture Local Memory    ]
+**    :                                                     ]
+**  0FFCH                                                   ]   1004 Index Registers
+*******************************************************************************
+*/
+typedef struct _MU
+{
+	uint32_t								resrved0[4];	            /*0000 000F*/
+	uint32_t								inbound_msgaddr0;	        /*0010 0013*/
+	uint32_t								inbound_msgaddr1;	        /*0014 0017*/
+	uint32_t								outbound_msgaddr0;	        /*0018 001B*/
+	uint32_t								outbound_msgaddr1;	        /*001C 001F*/
+	uint32_t								inbound_doorbell;	        /*0020 0023*/
+	uint32_t								inbound_intstatus;	        /*0024 0027*/
+	uint32_t								inbound_intmask;	        /*0028 002B*/
+	uint32_t								outbound_doorbell;	        /*002C 002F*/
+	uint32_t								outbound_intstatus;	        /*0030 0033*/
+	uint32_t								outbound_intmask;	        /*0034 0037*/
+	uint32_t								reserved1[2];	            /*0038 003F*/
+	uint32_t								inbound_queueport;	        /*0040 0043*/
+	uint32_t								outbound_queueport;     	/*0044 0047*/
+	uint32_t								reserved2[2];	            /*0048 004F*/
+	uint32_t                                reserved3[492];             /*0050 07FF ......local_buffer 492*/
+	uint32_t                                reserved4[128];             /*0800 09FF                    128*/
+	uint32_t                                message_rwbuffer[256];      /*0a00 0DFF                    256*/
+	uint32_t                                ioctl_wbuffer[32];          /*0E00 0E7F                     32*/
+    uint32_t                                reserved5[32];              /*0E80 0EFF                     32*/
+	uint32_t                                ioctl_rbuffer[32];          /*0F00 0F7F                     32*/
+	uint32_t                                reserved6[32];              /*0F80 0FFF                     32*/
+}MU,*PMU;
 /*
 *****************************************************************************
 **                      Theory of MU Operation
@@ -4808,5 +4768,232 @@ typedef struct _SENSE_DATA
 **        (E) Checksum : checksum of length and status or data byte
 **************************************************************************
 */
+extern int arcmsr_release(struct Scsi_Host *);
+extern int arcmsr_queue_command(struct scsi_cmnd *cmd,void (* done)(struct scsi_cmnd *cmd));
+extern int arcmsr_cmd_abort(struct scsi_cmnd *cmd);
+extern int arcmsr_bus_reset(struct scsi_cmnd *cmd);
+extern int arcmsr_ioctl(struct scsi_device *dev,int ioctl_cmd,void *arg);
+extern const char *arcmsr_info(struct Scsi_Host *);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+	#define   arcmsr_detect NULL
+    extern int arcmsr_proc_info(struct Scsi_Host *host, char *buffer, char **start, off_t offset, int length, int inout);
+    extern int arcmsr_bios_param(struct scsi_device *sdev, struct block_device *bdev, sector_t capacity, int *info);
+     
+	static ssize_t arcmsr_show_firmware_info(struct class_device *dev, char *buf)
+	{
+		struct Scsi_Host *host=class_to_shost(dev);
+		struct _ACB *pACB=(struct _ACB *) host->hostdata;
+		unsigned long flags=0;
+		ssize_t len;
 
+		spin_lock_irqsave(pACB->host->host_lock, flags);
+		len=snprintf(buf, PAGE_SIZE,
+					"=================================\n"
+					"Firmware Version:  %s\n"
+					"%s"
+					"Adapter Model:           %s\n"
+					"Reguest Lenth:               %4d\n"
+					"Numbers of Queue:            %4d\n"
+					"SDRAM Size:                  %4d\n"
+					"IDE Channels:                %4d\n"
+					"=================================\n",
+					pACB->firm_version,
+					(strncmp(pACB->firm_version,"V1.37",5) < 0) ? "                   PLEASE UPDATE RAID FIRMWARE VERSION EQUAL OR MORE THAN 'V1.37'\n" : "",
+					pACB->firm_model,
+					pACB->firm_request_len,
+					pACB->firm_numbers_queue,
+					pACB->firm_sdram_size,
+					pACB->firm_ide_channels);
+		spin_unlock_irqrestore(pACB->host->host_lock, flags);
+		return len;
+	}
+	static ssize_t arcmsr_show_driver_state(struct class_device *dev, char *buf)
+	{
+		struct Scsi_Host *host=class_to_shost(dev);
+		struct _ACB *pACB=(struct _ACB *)host->hostdata;
+		unsigned long flags=0;
+		ssize_t len;
+
+		spin_lock_irqsave(pACB->host->host_lock, flags);
+		len=snprintf(buf, PAGE_SIZE, 
+					"=================================\n"
+					"ARCMSR: %s\n"
+					"Current commands posted:     %4d\n"
+					"Max commands posted:         %4d\n"
+					"Current pending commands:    %4d\n"
+					"Max pending commands:        %4d\n"
+					"Max sgl length:              %4d\n"
+					"Max sector count:            %4d\n"
+					"SCSI Host Resets:            %4d\n"
+					"SCSI Aborts/Timeouts:        %4d\n"
+					"=================================\n",
+					ARCMSR_DRIVER_VERSION,
+					atomic_read(&pACB->ccboutstandingcount),
+					ARCMSR_MAX_OUTSTANDING_CMD,
+					atomic_read(&pACB->ccbwait2gocount),
+					ARCMSR_MAX_FREECCB_NUM-ARCMSR_MAX_OUTSTANDING_CMD,
+					ARCMSR_MAX_SG_ENTRIES,
+					ARCMSR_MAX_XFER_SECTORS,
+					pACB->num_resets,
+					pACB->num_aborts);
+		spin_unlock_irqrestore(pACB->host->host_lock, flags);
+		return len;
+	} 
+	static struct class_device_attribute arcmsr_firmware_info_attr=
+	{
+		.attr={
+			.name="firmware_info",
+			.mode=S_IRUGO, 
+		},
+		.show	=arcmsr_show_firmware_info,
+	};
+	static struct class_device_attribute arcmsr_driver_state_attr=
+	{
+		.attr={
+			.name="driver_state",
+			.mode=S_IRUGO,
+		},
+		.show=arcmsr_show_driver_state
+	};  
+	static struct class_device_attribute *arcmsr_scsi_host_attr[]=
+	{
+		&arcmsr_firmware_info_attr,
+		&arcmsr_driver_state_attr,
+		NULL
+	};
+	#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+		static int arcmsr_adjust_disk_queue_depth(struct scsi_device *sdev,int queue_depth)
+		{
+			if(queue_depth > ARCMSR_MAX_CMD_PERLUN)
+			{
+				queue_depth=ARCMSR_MAX_CMD_PERLUN;
+			}
+			scsi_adjust_queue_depth(sdev, MSG_ORDERED_TAG, queue_depth);
+			return queue_depth;
+		}
+    #else
+		static ssize_t arcmsr_adjust_disk_queue_depth(struct device *dev, const char *buf, size_t count)
+		{
+			int queue_depth;
+			struct scsi_device *sdev = to_scsi_device(dev);
+
+			queue_depth = simple_strtoul(buf, NULL, 0);
+			if(queue_depth > ARCMSR_MAX_CMD_PERLUN)
+				return -EINVAL;
+			scsi_adjust_queue_depth(sdev, MSG_ORDERED_TAG, queue_depth);
+			return count;
+		}
+		static struct device_attribute arcmsr_queue_depth_attr = 
+		{
+			.attr = {
+				.name =	"queue_depth",
+				.mode =	S_IRUSR | S_IWUSR,
+			},
+			.store = arcmsr_adjust_disk_queue_depth
+		};
+		static struct device_attribute *arcmsr_scsi_device_attr[] = 
+		{
+			&arcmsr_queue_depth_attr,
+			NULL,
+		};
+    #endif
+	static struct scsi_host_template arcmsr_scsi_host_template = {
+		    .module                 = THIS_MODULE,
+			.proc_name	            = "arcmsr",
+    		.proc_info	            = arcmsr_proc_info,
+    		.name		            = "ARCMSR ARECA SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
+    		.release	            = arcmsr_release,
+			.info                   = arcmsr_info,
+	        .ioctl                  = arcmsr_ioctl,
+    		.queuecommand	        = arcmsr_queue_command,
+			.eh_strategy_handler    = NULL,	
+			.eh_abort_handler       = arcmsr_cmd_abort,
+			.eh_device_reset_handler= NULL,	
+			.eh_bus_reset_handler   = arcmsr_bus_reset,
+			.eh_host_reset_handler  = NULL,	
+     		.bios_param	            = arcmsr_bios_param,	
+    		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
+    		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
+    		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
+			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
+    		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
+     		.unchecked_isa_dma      = 0,
+			.use_clustering	        = ENABLE_CLUSTERING,
+			.shost_attrs		    = arcmsr_scsi_host_attr,
+		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
+			.change_queue_depth	    =arcmsr_adjust_disk_queue_depth,
+        #else
+			.sdev_attrs		        = arcmsr_scsi_device_attr,
+        #endif
+	};
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
+	extern int arcmsr_detect(Scsi_Host_Template *);
+	extern int arcmsr_schedule_command(struct scsi_cmnd *  pcmd);
+    extern int arcmsr_proc_info(char * buffer,char ** start,off_t offset,int length,int hostno,int inout);
+	extern int arcmsr_bios_param(Disk *, kdev_t , int []);
+
+	static Scsi_Host_Template driver_template = {
+			.proc_name	            = "arcmsr",
+    		.proc_info	            = arcmsr_proc_info,
+    		.name		            = "ARCMSR ARECA SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
+    		.detect		            = arcmsr_detect,
+    		.release	            = arcmsr_release,
+			.info                   = arcmsr_info,
+			.ioctl                  = arcmsr_ioctl,
+			.command                = arcmsr_schedule_command,
+    		.queuecommand	        = arcmsr_queue_command,
+			.eh_strategy_handler    = NULL,	
+			.eh_abort_handler       = arcmsr_cmd_abort,
+			.eh_device_reset_handler= NULL,	
+			.eh_bus_reset_handler   = arcmsr_bus_reset,
+			.eh_host_reset_handler  = NULL,	
+     		.bios_param	            = arcmsr_bios_param,	
+    		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
+    		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
+    		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
+			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
+    		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
+     		.unchecked_isa_dma      = 0,
+    		.use_clustering	        = DISABLE_CLUSTERING,
+		};
+		#include "/usr/src/linux/drivers/scsi/scsi_module.c"
+#else /* KERNEL_VERSION(2,2,xx) */
+    extern int arcmsr_detect(Scsi_Host_Template *);
+    extern int arcmsr_schedule_command(struct scsi_cmnd *  pcmd);
+    extern int arcmsr_proc_info(char * buffer,char ** start,off_t offset,int length,int hostno,int inout);
+	extern int arcmsr_bios_param(Disk *, kdev_t , int []);
+
+	#define ARCMSR	{						        \
+		proc_dir:                     NULL,			\
+		proc_info:                    arcmsr_proc_info,			\
+		name:                         "ARCMSR ARECA SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */ \
+		detect:                       arcmsr_detect,					\
+		release:                      arcmsr_release,				\
+		info:                         arcmsr_info,					\
+        ioctl:                        arcmsr_ioctl,                 \
+		command:                      arcmsr_schedule_command,						\
+		queuecommand:                 arcmsr_queue_command,				\
+		eh_strategy_handler:          NULL,				\
+		eh_abort_handler:             arcmsr_cmd_abort,					\
+		eh_device_reset_handler:      NULL,				\
+		eh_bus_reset_handler:         arcmsr_bus_reset,				\
+		eh_host_reset_handler:        NULL,				\
+		abort:                        NULL,					\
+		reset:                        NULL,					\
+		slave_attach:                 NULL,					\
+		bios_param:                   arcmsr_bios_param,				\
+		can_queue:                    ARCMSR_MAX_OUTSTANDING_CMD,\
+		this_id:                      ARCMSR_SCSI_INITIATOR_ID,		\
+		sg_tablesize:                 ARCMSR_MAX_SG_ENTRIES,	\
+		cmd_per_lun:                  ARCMSR_MAX_CMD_PERLUN,		\
+		use_new_eh_code:              1,				\
+		unchecked_isa_dma:            0,	\
+		use_clustering:               DISABLE_CLUSTERING	\
+	}
+	#ifdef MODULE
+		/* Eventually this will go into an include file, but this will be later */
+		Scsi_Host_Template driver_template = ARCMSR;
+		#include "scsi_module.c"
+	#endif
+#endif
