@@ -67,16 +67,17 @@
 #ifndef __iomem
    #define __iomem          
 #endif
-#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.0X.13 2006/11/07"
+#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.0X.14"
 #define ARCMSR_SCSI_INITIATOR_ID                                              255
 #define ARCMSR_MAX_XFER_SECTORS                                               512 /* (512*512) / 1024 = 0x0040000 (256K) */
+#define ARCMSR_MAX_XFER_SECTORS_B                                            4096 /* (4096*512) / 1024 = 0x0100000 (1M) */
 #define ARCMSR_MAX_TARGETID                                                    17 /*17 max target id + 1*/
 #define ARCMSR_MAX_TARGETLUN                                                    8 /*8*/
 #define ARCMSR_MAX_CMD_PERLUN                          ARCMSR_MAX_OUTSTANDING_CMD /* ARCMSR_MAX_FREECCB_NUM  if eq. 256 will kernel panic at 2.2.x */
 #define ARCMSR_MAX_QBUFFER                                                   4096 /* ioctl QBUFFER */
 #define ARCMSR_MAX_SG_ENTRIES                                                  38 /* max 38*/
 #define ARCMSR_MAX_ADAPTER                                                      4
-#define ARCMSR_SD_TIMEOUT                                                 (90*HZ)
+#define ARCMSR_SD_TIMEOUT									90*(HZ)
 /*
 **********************************************************************************
 **
@@ -338,7 +339,8 @@ struct FIRMWARE_INFO
 **		All SCSI Command must be sent through postQ:
 **		(inbound queue port)	Request frame must be 32 bytes aligned 
 **            #   bit27--bit31 => flag for post ccb 
-**			  #   bit0--bit26 => real address (bit27--bit31) of post arcmsr_cdb  
+**	        #     bit0--bit26 => real address 
+**                   (bit27--bit31) of post arcmsr_cdb  
 **													bit31 : 0 : 256 bytes frame
 **															1 : 512 bytes frame
 **													bit30 : 0 : normal request
@@ -553,10 +555,10 @@ struct ARCMSR_CDB
 #define SCSISTAT_RESERVATION_CONFLICT  		0x18
 #define SCSISTAT_COMMAND_TERMINATED    		0x22
 #define SCSISTAT_QUEUE_FULL            		0x28
-#define ARCMSR_DEV_SELECT_TIMEOUT           0xF0
-#define ARCMSR_DEV_ABORTED                  0xF1
-#define ARCMSR_DEV_INIT_FAIL                0xF2
-
+#define ARCMSR_DEV_SELECT_TIMEOUT               0xF0
+#define ARCMSR_DEV_ABORTED                      0xF1
+#define ARCMSR_DEV_INIT_FAIL                    0xF2
+#define ARCMSR_DEV_CHECK_CONDITION	        0x02	
 	uint8_t     						SenseData[15];    /* 21h   output                  */        
 
 	union
@@ -644,6 +646,7 @@ struct AdapterControlBlock
 #define ACB_F_BUS_RESET               0x0080
 #define ACB_F_IOP_INITED              0x0100                    		/* iop init */
 #define ACB_F_HAVE_MSI                0x0200   
+#define ACB_F_FIRMWARE_TRAP           0x0400   
 
     struct CommandControlBlock *    pccb_pool[ARCMSR_MAX_FREECCB_NUM];      /* used for memory free */
 	struct list_head                ccb_free_list;		                    /* head of free ccb list */
@@ -686,8 +689,7 @@ struct HCBARC
 {
 	struct AdapterControlBlock *  	acb[ARCMSR_MAX_ADAPTER]; 
 
-    int32_t                         arcmsr_major_number;
-
+        int32_t                         arcmsr_major_number;
 	uint8_t                     	adapterCnt;
 	uint8_t                     	reserved[3];    
 };
@@ -4799,11 +4801,6 @@ extern int arcmsr_queue_command(struct scsi_cmnd *cmd,void (* done)(struct scsi_
 extern int arcmsr_abort(struct scsi_cmnd *cmd);
 extern int arcmsr_bus_reset(struct scsi_cmnd *cmd);
 extern const char *arcmsr_info(struct Scsi_Host *);
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,0)
-    extern int arcmsr_ioctl(struct scsi_device *dev,int ioctl_cmd,void __user *arg);
-#else
-    extern int arcmsr_ioctl(struct scsi_device *dev,int ioctl_cmd,void *arg);
-#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	#define   arcmsr_detect NULL
     extern int arcmsr_proc_info(struct Scsi_Host *host, char *buffer, char **start, off_t offset, int length, int inout);
@@ -4839,10 +4836,31 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 	{
 		struct Scsi_Host *host=class_to_shost(dev);
 		struct AdapterControlBlock *acb=(struct AdapterControlBlock *)host->hostdata;
+		struct MessageUnit __iomem *reg=acb->pmu;
+		char *iop_firm_version=(char *)(&reg->message_rwbuffer[17]); /*firm_version,17,68-83*/
 		unsigned long flags=0;
 		ssize_t len;
 
 		spin_lock_irqsave(acb->host->host_lock, flags);
+		if(strncmp(iop_firm_version,"V1.42",5) >= 0){
+			len=snprintf(buf, PAGE_SIZE, 
+					"=================================\n"
+					"ARCMSR: %s\n"
+					"Current commands posted:     	%4d\n"
+					"Max commands posted:         	%4d\n"
+					"Max sgl length:              	%4d\n"
+					"Max sector count:            	%4d\n"
+					"SCSI Host Resets:            	%4d\n"
+					"SCSI Aborts/Timeouts:        	%4d\n"
+					"=================================\n",
+					ARCMSR_DRIVER_VERSION,
+					atomic_read(&acb->ccboutstandingcount),
+					ARCMSR_MAX_OUTSTANDING_CMD,
+					ARCMSR_MAX_SG_ENTRIES,
+					ARCMSR_MAX_XFER_SECTORS_B,
+					acb->num_resets,
+					acb->num_aborts);
+		} else {
 		len=snprintf(buf, PAGE_SIZE, 
 					"=================================\n"
 					"ARCMSR: %s\n"
@@ -4860,6 +4878,7 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 					ARCMSR_MAX_XFER_SECTORS,
 					acb->num_resets,
 					acb->num_aborts);
+		}
 		spin_unlock_irqrestore(acb->host->host_lock, flags);
 		return len;
 	} 
@@ -4927,18 +4946,17 @@ extern const char *arcmsr_info(struct Scsi_Host *);
     		.proc_info	            = arcmsr_proc_info,
     		.name		            = "ARCMSR ARECA SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
     		.release	            = arcmsr_release,
-			.info                   = arcmsr_info,
-	        .ioctl                  = arcmsr_ioctl,
+		.info                   = arcmsr_info,
     		.queuecommand	        = arcmsr_queue_command,
-			.eh_abort_handler       = arcmsr_abort,
-			.eh_device_reset_handler= NULL,	
-			.eh_bus_reset_handler   = arcmsr_bus_reset,
-			.eh_host_reset_handler  = NULL,	
+		.eh_abort_handler       = arcmsr_abort,
+		.eh_device_reset_handler= NULL,	
+		.eh_bus_reset_handler   = arcmsr_bus_reset,
+		.eh_host_reset_handler  = NULL,	
      		.bios_param	            = arcmsr_bios_param,	
     		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
     		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
     		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
-			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
+		.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
     		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
      		.unchecked_isa_dma      = 0,
 			.use_clustering	        = ENABLE_CLUSTERING,
@@ -4961,19 +4979,18 @@ extern const char *arcmsr_info(struct Scsi_Host *);
     		.name		            = "ARCMSR ARECA SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
     		.detect		            = arcmsr_detect,
     		.release	            = arcmsr_release,
-			.info                   = arcmsr_info,
-			.ioctl                  = arcmsr_ioctl,
-			.command                = arcmsr_schedule_command,
+		.info                   = arcmsr_info,
+		.command                = arcmsr_schedule_command,
     		.queuecommand	        = arcmsr_queue_command,
-			.eh_abort_handler       = arcmsr_abort,
-			.eh_device_reset_handler= NULL,	
-			.eh_bus_reset_handler   = arcmsr_bus_reset,
-			.eh_host_reset_handler  = NULL,	
+		.eh_abort_handler       = arcmsr_abort,
+		.eh_device_reset_handler= NULL,	
+		.eh_bus_reset_handler   = arcmsr_bus_reset,
+		.eh_host_reset_handler  = NULL,	
      		.bios_param	            = arcmsr_bios_param,	
     		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
     		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
     		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
-			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
+		.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
     		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
      		.unchecked_isa_dma      = 0,
     		.use_clustering	        = DISABLE_CLUSTERING,
@@ -4992,7 +5009,6 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 		detect:                       arcmsr_detect,					\
 		release:                      arcmsr_release,				\
 		info:                         arcmsr_info,					\
-        ioctl:                        arcmsr_ioctl,                 \
 		command:                      arcmsr_schedule_command,						\
 		queuecommand:                 arcmsr_queue_command,				\
 		eh_abort_handler:             arcmsr_abort,					\
