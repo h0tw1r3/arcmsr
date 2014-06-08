@@ -108,7 +108,7 @@
 	     &pos->member != (head); 					\
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
 #endif
-#define ARCMSR_DRIVER_VERSION				"Driver Version 1.20.0X.15.80603"
+#define ARCMSR_DRIVER_VERSION				"Driver Version 1.20.0X.15.81103"
 #define ARCMSR_SCSI_INITIATOR_ID			255
 #define ARCMSR_MAX_XFER_SECTORS			512 /* (512*512) / 1024 = 0x0040000 (256K) */
 #define ARCMSR_MAX_XFER_SECTORS_B			4096 /* (4096*512) / 1024 = 0x0100000 (1M) */
@@ -815,10 +815,10 @@ struct AdapterControlBlock
 	char					device_map[20];			/*21,84-99*/
 	#if (ARCMSR_FW_POLLING && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 		struct work_struct 			arcmsr_do_message_isr_bh;
-		struct timer_list				eternal_timer;
-		unsigned short				fw_state;
-		atomic_t 					rq_map_token;
-		int					ante_token_value;
+		struct timer_list			eternal_timer;
+		unsigned short			fw_state;
+		atomic_t 				rq_map_token;
+		int				ante_token_value;
 	#endif
 };
 /*
@@ -4949,119 +4949,121 @@ extern const char *arcmsr_info(struct Scsi_Host *);
 /*
 *******************************************************************************
 *******************************************************************************
-*/     
-	static ssize_t arcmsr_show_firmware_info(struct class_device *dev, char *buf)
-	{
-		struct Scsi_Host *host = class_to_shost(dev);
-		struct AdapterControlBlock *acb = (struct AdapterControlBlock *) host->hostdata;
-		unsigned long flags = 0;
-		ssize_t len;
-
-		spin_lock_irqsave(acb->host->host_lock, flags);
-		len = snprintf(buf, PAGE_SIZE,
-					"=================================\n"
-					"Firmware Version:  		%s\n"
-					"Adapter Model:			%s\n"
-					"Reguest Lenth:			%4d\n"
-					"Numbers of Queue:		%4d\n"
-					"SDRAM Size:			%4d\n"
-					"IDE Channels:			%4d\n"
-					"=================================\n",
-					acb->firm_version,
-					acb->firm_model,
-					acb->firm_request_len,
-					acb->firm_numbers_queue,
-					acb->firm_sdram_size,
-					acb->firm_ide_channels);
-		spin_unlock_irqrestore(acb->host->host_lock, flags);
-		return len;
-	}
-/*
-*******************************************************************************
-*******************************************************************************
 */
-	static ssize_t arcmsr_show_driver_state(struct class_device *dev, char *buf)
-	{
-		struct Scsi_Host *host = class_to_shost(dev);
-		struct AdapterControlBlock *acb = (struct AdapterControlBlock *)host->hostdata;
-		unsigned long flags = 0;
-		ssize_t len;
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+		static ssize_t arcmsr_show_firmware_info(struct class_device *dev, char *buf)
+		{
+			struct Scsi_Host *host = class_to_shost(dev);
+			struct AdapterControlBlock *acb = (struct AdapterControlBlock *) host->hostdata;
+			unsigned long flags = 0;
+			ssize_t len;
 
-		spin_lock_irqsave(acb->host->host_lock, flags);
-		if(strncmp(acb->firm_version,"V1.42",5) >= 0){
-			len = snprintf(buf, PAGE_SIZE, 
-					"=================================\n"
-					"ARCMSR: %s\n"
-					"Current commands posted:     	%4d\n"
-					"Max commands posted:         	%4d\n"
-					"Max sgl length:              		%4d\n"
-					"Max sector count:            		%4d\n"
-					"SCSI Host Resets:            		%4d\n"
-					"SCSI Aborts/Timeouts:        	%4d\n"
-					"=================================\n",
-					ARCMSR_DRIVER_VERSION,
-					atomic_read(&acb->ccboutstandingcount),
-					ARCMSR_MAX_OUTSTANDING_CMD,
-					ARCMSR_MAX_SG_ENTRIES,
-					ARCMSR_MAX_XFER_SECTORS_B,
-					acb->num_resets,
-					acb->num_aborts);
-		} else {
-			len = snprintf(buf, PAGE_SIZE, 
-					"=================================\n"
-					"ARCMSR: %s\n"
-					"Current commands posted:     	%4d\n"
-					"Max commands posted:         	%4d\n"
-					"Max sgl length:              		%4d\n"
-					"Max sector count:            		%4d\n"
-					"SCSI Host Resets:            		%4d\n"
-					"SCSI Aborts/Timeouts:        	%4d\n"
-					"=================================\n",
-					ARCMSR_DRIVER_VERSION,
-					atomic_read(&acb->ccboutstandingcount),
-					ARCMSR_MAX_OUTSTANDING_CMD,
-					ARCMSR_MAX_SG_ENTRIES,
-					ARCMSR_MAX_XFER_SECTORS,
-					acb->num_resets,
-					acb->num_aborts);
+			spin_lock_irqsave(acb->host->host_lock, flags);
+			len = snprintf(buf, PAGE_SIZE,
+						"=================================\n"
+						"Firmware Version:  		%s\n"
+						"Adapter Model:			%s\n"
+						"Reguest Lenth:			%4d\n"
+						"Numbers of Queue:		%4d\n"
+						"SDRAM Size:			%4d\n"
+						"IDE Channels:			%4d\n"
+						"=================================\n",
+						acb->firm_version,
+						acb->firm_model,
+						acb->firm_request_len,
+						acb->firm_numbers_queue,
+						acb->firm_sdram_size,
+						acb->firm_ide_channels);
+			spin_unlock_irqrestore(acb->host->host_lock, flags);
+			return len;
 		}
-		spin_unlock_irqrestore(acb->host->host_lock, flags);
-		return len;
-	}
-/*
-*******************************************************************************
-*******************************************************************************
-*/
-	static struct class_device_attribute arcmsr_firmware_info_attr =
-	{
-		.attr = {
-			.name = "firmware_info",
-			.mode = S_IRUGO, 
-		},
-		.show	= arcmsr_show_firmware_info,
-	};
-/*
-*******************************************************************************
-*******************************************************************************
-*/
-	static struct class_device_attribute arcmsr_driver_state_attr =
-	{
-		.attr = {
-			.name = "driver_state",
-			.mode = S_IRUGO,
-		},
-		.show = arcmsr_show_driver_state
-	};
-/*
-*******************************************************************************
-*******************************************************************************
-*/
-	static struct class_device_attribute *arcmsr_scsi_host_attr[] =
-	{
-		&arcmsr_firmware_info_attr,
-		&arcmsr_driver_state_attr,
-		NULL
-	};
+	/*
+	*******************************************************************************
+	*******************************************************************************
+	*/
+		static ssize_t arcmsr_show_driver_state(struct class_device *dev, char *buf)
+		{
+			struct Scsi_Host *host = class_to_shost(dev);
+			struct AdapterControlBlock *acb = (struct AdapterControlBlock *)host->hostdata;
+			unsigned long flags = 0;
+			ssize_t len;
+
+			spin_lock_irqsave(acb->host->host_lock, flags);
+			if(strncmp(acb->firm_version,"V1.42",5) >= 0){
+				len = snprintf(buf, PAGE_SIZE, 
+						"=================================\n"
+						"ARCMSR: %s\n"
+						"Current commands posted:     	%4d\n"
+						"Max commands posted:         	%4d\n"
+						"Max sgl length:              		%4d\n"
+						"Max sector count:            		%4d\n"
+						"SCSI Host Resets:            		%4d\n"
+						"SCSI Aborts/Timeouts:        	%4d\n"
+						"=================================\n",
+						ARCMSR_DRIVER_VERSION,
+						atomic_read(&acb->ccboutstandingcount),
+						ARCMSR_MAX_OUTSTANDING_CMD,
+						ARCMSR_MAX_SG_ENTRIES,
+						ARCMSR_MAX_XFER_SECTORS_B,
+						acb->num_resets,
+						acb->num_aborts);
+			} else {
+				len = snprintf(buf, PAGE_SIZE, 
+						"=================================\n"
+						"ARCMSR: %s\n"
+						"Current commands posted:     	%4d\n"
+						"Max commands posted:         	%4d\n"
+						"Max sgl length:              		%4d\n"
+						"Max sector count:            		%4d\n"
+						"SCSI Host Resets:            		%4d\n"
+						"SCSI Aborts/Timeouts:        	%4d\n"
+						"=================================\n",
+						ARCMSR_DRIVER_VERSION,
+						atomic_read(&acb->ccboutstandingcount),
+						ARCMSR_MAX_OUTSTANDING_CMD,
+						ARCMSR_MAX_SG_ENTRIES,
+						ARCMSR_MAX_XFER_SECTORS,
+						acb->num_resets,
+						acb->num_aborts);
+			}
+			spin_unlock_irqrestore(acb->host->host_lock, flags);
+			return len;
+		}
+	/*
+	*******************************************************************************
+	*******************************************************************************
+	*/
+		static struct class_device_attribute arcmsr_firmware_info_attr =
+		{
+			.attr = {
+				.name = "firmware_info",
+				.mode = S_IRUGO, 
+			},
+			.show	= arcmsr_show_firmware_info,
+		};
+	/*
+	*******************************************************************************
+	*******************************************************************************
+	*/
+		static struct class_device_attribute arcmsr_driver_state_attr =
+		{
+			.attr = {
+				.name = "driver_state",
+				.mode = S_IRUGO,
+			},
+			.show = arcmsr_show_driver_state
+		};
+	/*
+	*******************************************************************************
+	*******************************************************************************
+	*/
+		static struct class_device_attribute *arcmsr_scsi_host_attr[] =
+		{
+			&arcmsr_firmware_info_attr,
+			&arcmsr_driver_state_attr,
+			NULL
+		};
+	#endif
 /*
 *******************************************************************************
 *******************************************************************************
@@ -5126,7 +5128,9 @@ extern const char *arcmsr_info(struct Scsi_Host *);
     		.cmd_per_lun	        		= ARCMSR_MAX_CMD_PERLUN,	
      		.unchecked_isa_dma      		= 0,
 		.use_clustering	        		= ENABLE_CLUSTERING,
-		.shost_attrs		    	= arcmsr_scsi_host_attr,
+		#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+			.shost_attrs		    	= arcmsr_scsi_host_attr,
+		#endif
 		#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,11)
 			.change_queue_depth	=arcmsr_adjust_disk_queue_depth,
 		#else

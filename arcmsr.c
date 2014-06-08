@@ -146,7 +146,10 @@
 **											2. add the function to automatic scan as the volume added or delected for kernel version greater than 2.6.0
 **											3. support the notification of the FW status to the AP layer for kernel version greater than 2.6.0
 ** 1.20.0X.15	03/06/2008	Erich Chen & Nick Cheng					
-**											1. support SG-related functions after kernel-2.6.2x
+** 											1. support SG-related functions after kernel-2.6.2x
+** 1.20.0X.15	03/11/2008	Nick Cheng
+**											1. fix the syntax error
+** 											2. compatible to kernel-2.6.26
 ******************************************************************************************
 */
 #define	ARCMSR_DEBUG			0
@@ -165,7 +168,7 @@
 		#endif
     	#endif
 
-	#if defined(ARCMSR_PP_RESET) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)
+	#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 		int sleeptime = 20;
 		int retrycount = 12;
 	#endif
@@ -526,7 +529,7 @@ static void arcmsr_enable_outbound_ints(struct AdapterControlBlock *acb, u32 ori
 		}
 	}
 
-	#elif (defined(ARCMSR_FW_POLLING) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+	#elif (ARCMSR_FW_POLLING && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 	static void arcmsr_message_isr_bh_fn(void *pacb) 
 	{
 		struct AdapterControlBlock *acb = (struct AdapterControlBlock *)pacb;
@@ -3529,7 +3532,7 @@ static void arcmsr_hardware_reset(struct AdapterControlBlock *acb)
 ****************************************************************************
 ****************************************************************************
 */
-#if (defined(ARCMSR_PP_RESET) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 	int arcmsr_sleep_for_bus_reset(struct scsi_cmnd *cmd)
 	{
 			struct Scsi_Host *shost = NULL;
@@ -3634,8 +3637,16 @@ static uint8_t arcmsr_iop_reset(struct AdapterControlBlock *acb)
 int arcmsr_bus_reset(struct scsi_cmnd *cmd) {
 	struct AdapterControlBlock *acb;
     	int retry = 0;
+	#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+		struct MessageUnit_A __iomem *reg;
+		uint32_t intmask_org, outbound_doorbell;
+		int retry_count = 0;
+	#endif
 
 	acb = (struct AdapterControlBlock *) cmd->device->host->hostdata;
+	#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+		reg = acb->pmuA;
+	#endif
 	if(acb->acb_flags & ACB_F_BUS_RESET)
 		return SUCCESS;
 
@@ -3650,15 +3661,11 @@ int arcmsr_bus_reset(struct scsi_cmnd *cmd) {
 	if(arcmsr_iop_reset(acb)) {
 		switch (acb->adapter_type) {
 		case ACB_ADAPTER_TYPE_A: {
-			struct MessageUnit_A __iomem *reg = acb->pmuA;
-			uint32_t intmask_org, outbound_doorbell;
-			int retry_count = 0;
-
 			printk("arcmsr%d: do hardware bus reset .....num_resets = %d num_aborts = %d \n", acb->adapter_index, acb->num_resets, acb->num_aborts);
 			arcmsr_hardware_reset(acb);
 			acb->acb_flags |= ACB_F_FIRMWARE_TRAP;
 			acb->acb_flags &= ~ACB_F_IOP_INITED;
-			#if (defined(ARCMSR_PP_RESET) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+			#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 			sleep_again:
 				arcmsr_sleep_for_bus_reset(cmd);
 				if(( readl(&reg->outbound_msgaddr1) & ARCMSR_OUTBOUND_MESG1_FIRMWARE_OK) == 0 ) {
@@ -3972,7 +3979,7 @@ static int arcmsr_alloc_ccb_pool(struct AdapterControlBlock *acb)
 **		cat /proc/scsi/arcmsr/0
 *********************************************************************
 */
-#if (defined(ARCMSR_PP_RESET) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 	static int arcmsr_set_info(char *buffer, int length, struct Scsi_Host *host) {
 		struct AdapterControlBlock *acb = (struct AdapterControlBlock *) host->hostdata;
 		struct scsi_device *pstSDev, *pstTmp;
@@ -4140,7 +4147,7 @@ else SPRINTF(" No ")
 	struct AdapterControlBlock *acb;
 	struct HCBARC *pHCBARC = &arcmsr_host_control_block;
 
-	#if (defined(ARCMSR_PP_RESET) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+	#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 		struct scsi_device *pstSDev, *pstTmp;
 		unsigned long flags;
 	#endif
@@ -4150,7 +4157,7 @@ else SPRINTF(" No ")
 	#endif
 	
    	if(inout) {
-		#if (defined(ARCMSR_PP_RESET) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+		#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 			return(arcmsr_set_info(buffer, length, host));
 		#else
 			return(arcmsr_set_info(buffer, length));
@@ -4167,7 +4174,7 @@ else SPRINTF(" No ")
 		SPRINTF("===========================\n"); 
 	}
 
-	#if (defined(ARCMSR_PP_RESET) && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+	#if (ARCMSR_PP_RESET && LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
 		SPRINTF("**********************************\n"); 
 		SPRINTF("host busy %d, failed %d, queue %d\n", host->host_busy, host->host_failed, host->can_queue);
         	printk("host busy %d, failed %d, queue %d\n", host->host_busy, host->host_failed, host->can_queue);

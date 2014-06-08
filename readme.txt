@@ -1,14 +1,14 @@
 ******************************************************************************************
 **        O.S   : Linux
 **   FILE NAME  : arcmsr.c
-**        BY    : Erich Chen   
+**   BY    : Erich Chen   
 **   Description: SCSI RAID Device Driver for 
 **                ARCMSR RAID Host adapter 
 ************************************************************************
 ** Copyright (C) 2002 - 2005, Areca Technology Corporation All rights reserved.
 **
 **     Web site: www.areca.com.tw
-**       E-mail: erich@areca.com.tw
+**       E-mail: support@areca.com.tw
 **
 ** This program is free software; you can redistribute it and/or modify
 ** it under the terms of the GNU General Public License version 2 as
@@ -40,45 +40,6 @@
 **(INCLUDING NEGLIGENCE OR OTHERWISE)ARISING IN ANY WAY OUT OF THE USE OF
 ** THIS SOFTWARE,EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **************************************************************************
-** History
-**
-**        REV#         DATE	            NAME	         DESCRIPTION
-**     1.00.00.00    3/31/2004	       Erich Chen	     First release
-**     1.10.00.04    7/28/2004         Erich Chen        modify for ioctl
-**     1.10.00.06    8/28/2004         Erich Chen        modify for 2.6.x
-**     1.10.00.08    9/28/2004         Erich Chen        modify for x86_64 
-**     1.10.00.10   10/10/2004         Erich Chen        bug fix for SMP & ioctl
-**     1.20.00.00   11/29/2004         Erich Chen        bug fix with arcmsr_bus_reset when PHY error
-**     1.20.00.02   12/09/2004         Erich Chen        bug fix with over 2T bytes RAID Volume
-**     1.20.00.04    1/09/2005         Erich Chen        fits for Debian linux kernel version 2.2.xx 
-**     1.20.0X.07    3/28/2005         Erich Chen        sync for 1.20.00.07 (linux.org version)
-**                                                       remove some unused function
-**                                                       --.--.0X.-- is for old style kernel compatibility
-**     1.20.0X.08    6/23/2005         Erich Chen        bug fix with abort command,in case of heavy loading when sata cable
-**                                                       working on low quality connection
-**     1.20.0X.09    9/12/2005         Erich Chen        bug fix with abort command handling,and firmware version check 
-**                                                       and firmware update notify for hardware bug fix
-**     1.20.0X.10    9/23/2005         Erich Chen        enhance sysfs function for change driver's max tag Q number.
-**                                                       add DMA_64BIT_MASK for backward compatible with all 2.6.x
-**                                                       add some useful message for abort command
-**                                                       add ioctl code 'ARCMSR_IOCTL_FLUSH_ADAPTER_CACHE'
-**                                                       customer can send this command for sync raid volume data
-**     1.20.0X.11    9/29/2005         Erich Chen        by comment of Arjan van de Ven fix incorrect msleep redefine
-**                                                       cast off sizeof(dma_addr_t) condition for 64bit pci_set_dma_mask
-**     1.20.0X.12    9/30/2005         Erich Chen        bug fix with 64bit platform's ccbs using if over 4G system memory
-**                                                       change 64bit pci_set_consistent_dma_mask into 32bit
-**                                                       increcct adapter count if adapter initialize fail.
-**                                                       miss edit at arcmsr_build_ccb....
-**                                                       psge += sizeof(struct _SG64ENTRY *) =>  psge += sizeof(struct _SG64ENTRY)
-**                                                       64 bits sg entry would be incorrectly calculated
-**                                                       thanks Kornel Wieliczek give me kindly notify and detail description
-**     1.20.0X.13   11/15/2005         Erich Chen        scheduling pending ccb with 'first in first out'
-**                                                       new firmware update notify
-**                  11/07/2006         Erich Chen        1.remove #include config.h and devfs_fs_kernel.h
-**                                                       2.enlarge the timeout duration of each scsi command 
-**                                                         it could aviod the vibration factor 
-**                                                         with sata disk on some bad machine 
-*********************************************************************************************
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
        Thanks to: 
@@ -124,4 +85,35 @@ module is done with the following command:
 # cd arcmsr 
 # make -C /lib/modules/`uname -r`/build CONFIG_SCSI_ARCMSR=m SUBDIRS=$PWD modules 
 
+3. For kernel 2.4 users
+======================
+
+Copy the `arcmsr' directory to $KSRC/drivers/scsi, then manually edit the
+following two files to add the options necessary to build the driver:
+--------------------------------------------------------------------------------------------
+Add the following line to $KSRC/drivers/scsi/Makefile:
+
+subdir-$(CONFIG_SCSI_ARCMSR)	+= arcmsr
+obj-$(CONFIG_SCSI_ARCMSR)	+= arcmsr/arcmsr.o
+--------------------------------------------------------------------------------------------
+Add the following block to $KSRC/drivers/scsi/Config.in:
+
+if [ "$CONFIG_PCI" = "y" ]; then
+   dep_tristate 'ARECA ARC11X0[PCI-X]/ARC12X0[PCI-EXPRESS] SATA-RAID support' CONFIG_SCSI_ARCMSR $CONFIG_SCSI
+ fi
+
+--------------------------------------------------------------------------------------------
+Now configure and build your kernel as you usually do, paying attention to
+select the Device Drivers -> SCSI device support -> SCSI low-level drivers -> ARECA SATA/SAS RAID Host Controller option.
+
+---------------------------------------------------------------------------------------------
+Notice :
+
+if the kernel have arcmsr driver buildin but the version is older than 1.20.00.15, 
+you have to added new controller's defination to avoid compile error...
+
+Add the following block to $KSRC/include/linux/pci_ids.h
+#define PCI_DEVICE_ID_ARECA_1200    0x1200
+#define PCI_DEVICE_ID_ARECA_1201    0x1201
+#define PCI_DEVICE_ID_ARECA_1202    0x1202
 
