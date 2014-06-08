@@ -115,3 +115,5 @@ Release Note :
 						1. fix DMA memory allocation failure in Xen
 						2. use command->sc_data_direction instead of trying (incorrectly) to figure it out from the command itself in
 03/11/2011	1.20.0X.15	1. increase the timeout value for every kind of scsi commands during driver modules installation if needed it
+05/09/2011	1.20.0X.15	1. fix the compiling error caused by the file smp_lock.h 
+06/22/2011	1.20.0X.15	1. change debug print
