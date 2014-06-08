@@ -4,9 +4,20 @@
 **   FILE NAME  : arcmsr.c
 **        BY    : Erich Chen   
 **   Description: SCSI RAID Device Driver for 
-**                ARECA (ARC1110/1120/1130/1160//1210/1220/1230/1260) SATA RAID HOST Adapter
-**                ARCMSR RAID Host adapter[RAID controller:INTEL 331(PCI-X) 341(PCI-EXPRESS) chip set]
-******************************************************************************************
+**                ARCMSR RAID Host adapter 
+************************************************************************
+** Copyright (C) 2002 - 2005, Areca Technology Corporation All rights reserved.
+**
+**     Web site: www.areca.com.tw
+**       E-mail: erich@areca.com.tw
+**
+** This program is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License version 2 as
+** published by the Free Software Foundation.
+** This program is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 ************************************************************************
 ** Redistribution and use in source and binary forms,with or without
 ** modification,are permitted provided that the following conditions
@@ -40,12 +51,13 @@
 **     1.10.00.10   10/10/2004         Erich Chen        bug fix for SMP & ioctl
 **     1.20.00.00   11/29/2004         Erich Chen        bug fix with arcmsr_bus_reset when PHY error
 **     1.20.00.02   12/09/2004         Erich Chen        bug fix with over 2T bytes RAID Volume
+**     1.20.00.04    1/09/2005         Erich Chen        fits for Debian linux kernel version 2.2.xx 
 ******************************************************************************************
 **********************************************************************
 **   value=call_usermodehelper (argv [0],argv,envp);
 **********************************************************************
 */
-#define ARCMSR_DEBUG             1
+#define ARCMSR_DEBUG                      1
 /************************************/
 #if defined __KERNEL__
 	#include <linux/config.h>
@@ -127,27 +139,18 @@ void arcmsr_pcidev_disattach(PACB pACB);
 void arcmsr_plunge_kernelthread(void);
 BOOLEAN arcmsr_wait_msgint_ready(PACB pACB);
 VOID arcmsr_iop_init(PACB pACB);
-const char *arcmsr_info(struct Scsi_Host *);
-int arcmsr_queue_command(Scsi_Cmnd *, void (*done)(Scsi_Cmnd *));
-int arcmsr_release(struct Scsi_Host *);
 int arcmsr_iop_ioctlcmd(PACB pACB,int ioctl_cmd,void *arg);
 int arcmsr_initialize(PACB pACB,struct pci_dev *pPCI_DEV);
-int arcmsr_cmd_abort(Scsi_Cmnd *);
-int arcmsr_bus_reset(Scsi_Cmnd *);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	#define arcmsr_detect NULL
-    int arcmsr_proc_info(struct Scsi_Host *host, char *buffer, char **start, off_t offset, int length, int inout);
-    int arcmsr_bios_param(struct scsi_device *sdev, struct block_device *bdev, sector_t capacity, int *info);
     static irqreturn_t arcmsr_HwInterrupt(PACB pACB);
     static int arcmsr_device_probe(struct pci_dev *pPCI_DEV,const struct pci_device_id *id);
-	static void	arcmsr_device_remove(struct pci_dev *pPCI_DEV);
+	static void arcmsr_device_remove(struct pci_dev *pPCI_DEV);
 #else
+    void arcmsr_HwInterrupt(PACB pACB);
     int arcmsr_schedule_command(PSCSICMD pcmd);
     int arcmsr_detect(Scsi_Host_Template *);
-    int arcmsr_proc_info(char * buffer,char ** start,off_t offset,int length,int hostno,int inout);
-	int arcmsr_bios_param(Disk *, kdev_t , int []);
 	int arcmsr_ioctl(Scsi_Device *dev,int ioctl_cmd,void *arg);
-    void arcmsr_HwInterrupt(PACB pACB);
 #endif
 #ifndef BCD_TO_BIN
     #define BCD_TO_BIN(val) ((val)=((val)&15) + ((val)>>4)*10)
@@ -164,63 +167,6 @@ static struct file_operations arcmsr_file_operations =
 	   open:        arcmsr_fops_open,
 	release:       arcmsr_fops_close
 };
-/*
-************************************************************************
-**            arcmsr
-**           arcmsr_release
-**
-************************************************************************
-*/
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-	static Scsi_Host_Template arcmsr_scsi_host_template = {
-		    .module                 = THIS_MODULE,
-			.proc_name	            = "arcmsr",
-    		.proc_info	            = arcmsr_proc_info,
-    		.name		            = "ARCMSR(ARC1110/1120/1130/1160/1210/1220/1230/1260) SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
-    		.release	            = arcmsr_release,
-			.info                   = arcmsr_info,
-    		.queuecommand	        = arcmsr_queue_command,
-			.eh_strategy_handler    = NULL,	
-			.eh_abort_handler       = arcmsr_cmd_abort,
-			.eh_device_reset_handler= NULL,	
-			.eh_bus_reset_handler   = arcmsr_bus_reset,
-			.eh_host_reset_handler  = NULL,	
-     		.bios_param	            = arcmsr_bios_param,	
-    		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
-    		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
-    		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
-			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
-    		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
-     		.unchecked_isa_dma      = 0,
-    		.use_clustering	        = DISABLE_CLUSTERING,
-	};
-#else
-	static Scsi_Host_Template driver_template = {
-			.proc_name	            = "arcmsr",
-    		.proc_info	            = arcmsr_proc_info,
-    		.name		            = "ARCMSR(ARC1110/1120/1130/1160/1210/1220/1230/1260) SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
-    		.detect		            = arcmsr_detect,
-    		.release	            = arcmsr_release,
-			.info                   = arcmsr_info,
-			.ioctl                  = arcmsr_ioctl,
-			.command                = arcmsr_schedule_command,
-    		.queuecommand	        = arcmsr_queue_command,
-			.eh_strategy_handler    = NULL,	
-			.eh_abort_handler       = arcmsr_cmd_abort,
-			.eh_device_reset_handler= NULL,	
-			.eh_bus_reset_handler   = arcmsr_bus_reset,
-			.eh_host_reset_handler  = NULL,	
-     		.bios_param	            = arcmsr_bios_param,	
-    		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
-    		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
-    		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
-			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
-    		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
-     		.unchecked_isa_dma      = 0,
-    		.use_clustering	        = DISABLE_CLUSTERING,
-     };
-	 #include "/usr/src/linux/drivers/scsi/scsi_module.c"
-#endif
 /*
 **********************************************************************************
 **
@@ -559,8 +505,8 @@ static struct file_operations arcmsr_file_operations =
 	{
 		struct
 		{
-			u_int16_t   vendor_id;
-			u_int16_t   device_id;
+			unsigned int   vendor_id;
+			unsigned int   device_id;
 		} const arcmsr_devices[]={
 	  		{ PCIVendorIDARECA,PCIDeviceIDARC1110 }
 			,{ PCIVendorIDARECA,PCIDeviceIDARC1120 }
@@ -624,7 +570,9 @@ static struct file_operations arcmsr_file_operations =
 			#endif
 				psh->max_lun=ARCMSR_MAX_TARGETLUN;
 				psh->max_id=ARCMSR_MAX_TARGETID;/*16:8*/
+			#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
                 psh->max_cmd_len=16;            /*this is issue of 64bit LBA ,over 2T byte*/
+            #endif
 				psh->sg_tablesize=ARCMSR_MAX_SG_ENTRIES;
 				psh->can_queue=ARCMSR_MAX_OUTSTANDING_CMD; /* max simultaneous cmds */             
 				psh->cmd_per_lun=ARCMSR_MAX_CMD_PERLUN;            
@@ -651,6 +599,7 @@ static struct file_operations arcmsr_file_operations =
    					    scsi_unregister(psh);
 						goto next_areca;
 					}
+				#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
 					if (pci_request_regions(pPCI_DEV, "arcmsr"))
 					{
                         printk("arcmsr_detect:  pci_request_regions got ERROR...................\n");
@@ -661,6 +610,7 @@ static struct file_operations arcmsr_file_operations =
    					    scsi_unregister(psh);
 						goto next_areca;
 					}
+                #endif
 					arcmsr_iop_init(pACB);/* on kernel 2.4.21 driver's iop read/write must after request_irq */
 				}
 				else
@@ -668,7 +618,7 @@ static struct file_operations arcmsr_file_operations =
 					printk("arcmsr: arcmsr_initialize got ERROR...................\n");
 					scsi_unregister(psh);
 				}
-        next_areca:
+        next_areca: ;
 			}
 		}
 		if(arcmsr_adapterCnt)
@@ -683,7 +633,8 @@ static struct file_operations arcmsr_file_operations =
 		}
 		else
 		{
-			printk("arcmsr_detect:NO ARECA MASS STORAGE SATA RAID HOST ADAPTER FOUND...........\n");
+			printk("arcmsr_detect:...............NO ARECA RAID ADAPTER FOUND...........\n");
+			return(arcmsr_adapterCnt);
 		}
 		pHCBARC->adapterCnt=arcmsr_adapterCnt;
 		pHCBARC->arcmsr_major_number=register_chrdev(0, "arcmsr", &arcmsr_file_operations);
@@ -697,24 +648,26 @@ static struct file_operations arcmsr_file_operations =
 **    
 **********************************************************************
 */
-VOID arcmsr_pci_unmap_dma(PCCB pCCB)
-{
-	PACB pACB=pCCB->pACB;
-    PSCSICMD pcmd=pCCB->pcmd;
-
-	if(pcmd->use_sg != 0) 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
+	VOID arcmsr_pci_unmap_dma(PCCB pCCB)
 	{
-		struct scatterlist *sl;
+		PACB pACB=pCCB->pACB;
+		PSCSICMD pcmd=pCCB->pcmd;
 
-		sl = (struct scatterlist *)pcmd->request_buffer;
-		pci_unmap_sg(pACB->pPCI_DEV, sl, pcmd->use_sg, scsi_to_pci_dma_dir(pcmd->sc_data_direction));
-	} 
-	else if(pcmd->request_bufflen != 0)
-	{
-		pci_unmap_single(pACB->pPCI_DEV,(dma_addr_t)(ULONG)pcmd->SCp.ptr,pcmd->request_bufflen, scsi_to_pci_dma_dir(pcmd->sc_data_direction));
+		if(pcmd->use_sg != 0) 
+		{
+			struct scatterlist *sl;
+
+			sl = (struct scatterlist *)pcmd->request_buffer;
+			pci_unmap_sg(pACB->pPCI_DEV, sl, pcmd->use_sg, scsi_to_pci_dma_dir(pcmd->sc_data_direction));
+		} 
+		else if(pcmd->request_bufflen != 0)
+		{
+			pci_unmap_single(pACB->pPCI_DEV,(dma_addr_t)(ULONG)pcmd->SCp.ptr,pcmd->request_bufflen, scsi_to_pci_dma_dir(pcmd->sc_data_direction));
+		}
+		return;
 	}
-	return;
-}
+#endif
 /*
 **********************************************************************************
 **
@@ -1082,9 +1035,11 @@ VOID arcmsr_ccb_complete(PCCB pCCB)
     PSCSICMD pcmd=pCCB->pcmd;
 
 	#if ARCMSR_DEBUG0
-	printk("arcmsr_ccb_complete:..................... pCCB=0x%p ccb_doneindex=0x%x ccb_startindex=0x%x\n",pCCB,pACB->ccb_doneindex,pACB->ccb_startindex);
+	printk("arcmsr_ccb_complete:pCCB=0x%p ccb_doneindex=0x%x ccb_startindex=0x%x\n",pCCB,pACB->ccb_doneindex,pACB->ccb_startindex);
 	#endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
     arcmsr_pci_unmap_dma(pCCB);
+#endif
     spin_lock_irqsave(&pACB->ccb_doneindex_lockunlock,flag);
 	atomic_dec(&pACB->ccboutstandingcount);
 	pCCB->startdone=ARCMSR_CCB_DONE;
@@ -1303,16 +1258,26 @@ VOID arcmsr_build_ccb(PACB pACB,PCCB pCCB,PSCSICMD pcmd)
 		int length,sgcount,i,cdb_sgcount=0;
 		struct scatterlist *sl;
 
-		/* Get Scatter Gather List from Storport. */
+		/* Get Scatter Gather List from scsiport. */
 		sl=(struct scatterlist *) pcmd->request_buffer;
+	#if LINUX_VERSION_CODE >=KERNEL_VERSION(2,3,30)
 		sgcount=pci_map_sg(pACB->pPCI_DEV, sl, pcmd->use_sg, scsi_to_pci_dma_dir(pcmd->sc_data_direction));
+    #else
+        sgcount=pcmd->use_sg;
+    #endif
 		/* map stor port SG list to our iop SG List.*/
 		for(i=0;i<sgcount;i++) 
 		{
 			/* Get the physical address of the current data pointer */
+        #if LINUX_VERSION_CODE >=KERNEL_VERSION(2,3,30)
 			length=cpu_to_le32(sg_dma_len(sl));
             address_lo=cpu_to_le32(dma_addr_lo32(sg_dma_address(sl)));
 			address_hi=cpu_to_le32(dma_addr_hi32(sg_dma_address(sl)));
+        #else
+            length=cpu_to_le32(sl->length);
+			address_lo=cpu_to_le32(virt_to_bus(sl->address));
+            address_hi=0;
+        #endif
  			if(address_hi==0)
 			{
 				PSG32ENTRY pdma_sg=(PSG32ENTRY)psge;
@@ -1372,12 +1337,16 @@ VOID arcmsr_build_ccb(PACB pACB,PCCB pCCB,PSCSICMD pcmd)
 	}
 	else if(pcmd->request_bufflen) 
 	{
+    #if LINUX_VERSION_CODE >=KERNEL_VERSION(2,3,30)
         dma_addr_t dma_addr;
-
 		dma_addr=pci_map_single(pACB->pPCI_DEV, pcmd->request_buffer, pcmd->request_bufflen, scsi_to_pci_dma_dir(pcmd->sc_data_direction));
 		pcmd->SCp.ptr = (char *)(unsigned long) dma_addr;
         address_lo=cpu_to_le32(dma_addr_lo32(dma_addr));
 	    address_hi=cpu_to_le32(dma_addr_hi32(dma_addr));
+    #else
+        address_lo=cpu_to_le32(virt_to_bus(pcmd->request_buffer));/* Actual requested buffer */
+	    address_hi=0;
+    #endif
 		if(address_hi==0)
 		{
 			PSG32ENTRY pdma_sg=(PSG32ENTRY)psge;
@@ -1538,9 +1507,13 @@ static void arcmsr_free_pci_pool(PACB pACB)
 		}
 		pACB->uncacheptr_pool = NULL;
 	}
-#else
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
 	{
 	    pci_free_consistent(pACB->pPCI_DEV, ((sizeof(struct _CCB) * ARCMSR_MAX_FREECCB_NUM)+0x20), pACB->uncacheptr, pACB->dma_addr);
+	}
+#else
+	{
+        kfree(pACB->uncacheptr);
 	}
 #endif
 	return;
@@ -2756,7 +2729,7 @@ int arcmsr_initialize(PACB pACB,struct pci_dev *pPCI_DEV)
 	dma_addr_t dma_addr;
 	UCHAR pcicmd;
     PCCB pccb_tmp;
-	int i,rc;
+	int i,rc=0;
 	void *page_remapped;
 
 	#if ARCMSR_DEBUG0
@@ -2820,7 +2793,9 @@ int arcmsr_initialize(PACB pACB,struct pci_dev *pPCI_DEV)
 	**     pci_pool_destroy(pool);
 	******************************************************************************
 	*/
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
 	rc=pci_set_dma_mask(pPCI_DEV,(dma_addr_t)0x00000000ffffffffULL);/*32bit*/
+#endif
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	{
 		pACB->uncacheptr_pool = pci_pool_create("arcmsr", pPCI_DEV, sizeof(struct _CCB)+0x20, 8, 0);
@@ -2852,14 +2827,19 @@ int arcmsr_initialize(PACB pACB,struct pci_dev *pPCI_DEV)
   		}
         pACB->vir2phy_offset=(CPT2INT)pccb_tmp-(CPT2INT)dma_addr;
 	}
-#else
+#else 
 	{
 		PCCB pfreeccb;
 
-	    pACB->uncacheptr=(PUCHAR)pci_alloc_consistent(pPCI_DEV,((sizeof(struct _CCB) * ARCMSR_MAX_FREECCB_NUM)+0x20),&pACB->dma_addr);
+	#if LINUX_VERSION_CODE >=KERNEL_VERSION(2,3,30)
+		pACB->uncacheptr=(PUCHAR)pci_alloc_consistent(pPCI_DEV,((sizeof(struct _CCB) * ARCMSR_MAX_FREECCB_NUM)+0x20),&pACB->dma_addr);
+	#else
+		pACB->uncacheptr=kmalloc(((sizeof(struct _CCB) * ARCMSR_MAX_FREECCB_NUM)+0x20),GFP_KERNEL);
+        pACB->dma_addr=virt_to_bus(pACB->uncacheptr);
+	#endif
 		if(pACB->uncacheptr==NULL)
 		{
-			printk("arcmsr_initialize:......pci_alloc_consistent fail......\n");
+			printk("arcmsr_initialize:......arcmsr free ccb allocate fail......\n");
 			iounmap(pACB->pmu);
 			return(ENXIO);
 		}
@@ -2874,7 +2854,7 @@ int arcmsr_initialize(PACB pACB,struct pci_dev *pPCI_DEV)
 		for(i=0;i<ARCMSR_MAX_FREECCB_NUM;i++)
 		{
 			pccb_tmp=&pfreeccb[i];
-			if(((ULONG)pccb_tmp & 0x0000001F)==0) /*ccb address must 32 (0x20) boundary*/
+			if(((CPT2INT)pccb_tmp & 0x1F)==0) /*ccb address must 32 (0x20) boundary*/
 			{
 				pccb_tmp->cdb_shifted_phyaddr=dma_addr >> 5;
 			    pccb_tmp->pACB=pACB;
@@ -2899,7 +2879,9 @@ int arcmsr_initialize(PACB pACB,struct pci_dev *pPCI_DEV)
 	** if pccb_tmp.HighPart is not zero
 	********************************************************************
 	*/
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
     rc=pci_set_dma_mask(pPCI_DEV,(dma_addr_t)0xffffffffffffffffULL);/*set dma 64bit again if could*/
+#endif
  	pACB->adapter_index=arcmsr_adapterCnt;
 	pHCBARC->pACB[arcmsr_adapterCnt]=pACB;
     /* disable iop all outbound interrupt */
@@ -3018,7 +3000,9 @@ void arcmsr_pcidev_disattach(PACB pACB)
 		}
 	}
 	free_irq(pACB->pPCI_DEV->irq,pACB);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,0)
 	pci_release_regions(pACB->pPCI_DEV);
+#endif
  	iounmap(pACB->pmu);
     arcmsr_free_pci_pool(pACB);
     pHCBARC->pACB[pACB->adapter_index]=0; /* clear record */

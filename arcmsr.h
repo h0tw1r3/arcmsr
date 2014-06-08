@@ -4,9 +4,20 @@
 **   FILE NAME  : arcmsr.h
 **        BY    : Erich Chen   
 **   Description: SCSI RAID Device Driver for 
-**                ARECA (ARC1110/1120/1130/1160//1210/1220/1230/1260) SATA RAID HOST Adapter
-**                ARCMSR RAID Host adapter[RAID controller:INTEL 331(PCI-X) 341(PCI-EXPRESS) chip set]
+**                ARCMSR RAID Host adapter
 ***********************************************************************************************
+** Copyright (C) 2002 - 2005, Areca Technology Corporation All rights reserved.
+**
+**     Web site: www.areca.com.tw
+**       E-mail: erich@areca.com.tw
+**
+** This program is free software; you can redistribute it and/or modify
+** it under the terms of the GNU General Public License version 2 as
+** published by the Free Software Foundation.
+** This program is distributed in the hope that it will be useful,
+** but WITHOUT ANY WARRANTY; without even the implied warranty of
+** MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+** GNU General Public License for more details.
 ************************************************************************
 ** Redistribution and use in source and binary forms,with or without
 ** modification,are permitted provided that the following conditions
@@ -93,7 +104,14 @@ typedef  struct  _CMD_IOCTL_FIELD                               CMD_IOCTL_FIELD,
 **
 **********************************************************************************
 */
-#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.00.02"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
+	#define ARCMSR_MAX_OUTSTANDING_CMD                                            256
+	#define ARCMSR_MAX_FREECCB_NUM                                                320 
+#else
+	#define ARCMSR_MAX_OUTSTANDING_CMD                                            230
+	#define ARCMSR_MAX_FREECCB_NUM                                                240 
+#endif
+#define ARCMSR_DRIVER_VERSION                         "Driver Version 1.20.00.04"
 #define ARCMSR_SCSI_INITIATOR_ID                                               16
 #define ARCMSR_DEV_SECTOR_SIZE                                                512
 #define ARCMSR_MAX_XFER_SECTORS                                               256
@@ -101,9 +119,7 @@ typedef  struct  _CMD_IOCTL_FIELD                               CMD_IOCTL_FIELD,
 #define ARCMSR_MAX_TARGETID                                                    16 /*16 max target id + 1*/
 #define ARCMSR_MAX_TARGETLUN                                                    8 /*8*/
 #define ARCMSR_MAX_CHIPTYPE_NUM                                                 4
-#define ARCMSR_MAX_OUTSTANDING_CMD                                            256
-#define ARCMSR_MAX_CMD_PERLUN                          ARCMSR_MAX_OUTSTANDING_CMD
-#define ARCMSR_MAX_FREECCB_NUM                                                320
+#define ARCMSR_MAX_CMD_PERLUN                          ARCMSR_MAX_OUTSTANDING_CMD /* if eq. 256 will kernel panic at 2.2.x */
 #define ARCMSR_MAX_DPC                                                         16 /* defer procedure call */
 #define ARCMSR_MAX_QBUFFER                                                   4096 /* ioctl QBUFFER */
 #define ARCMSR_MAX_SG_ENTRIES                                                  38 /* max 38*/
@@ -4908,5 +4924,108 @@ struct _MU
 **        (E) Checksum : checksum of length and status or data byte
 **************************************************************************
 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+	#define arcmsr_detect NULL
+    extern    int arcmsr_proc_info(struct Scsi_Host *host, char *buffer, char **start, off_t offset, int length, int inout);
+    extern    int arcmsr_bios_param(struct scsi_device *sdev, struct block_device *bdev, sector_t capacity, int *info);
+ #else
+    extern    int arcmsr_proc_info(char * buffer,char ** start,off_t offset,int length,int hostno,int inout);
+	extern    int arcmsr_bios_param(Disk *, kdev_t , int []);
+	extern    int arcmsr_ioctl(Scsi_Device *dev,int ioctl_cmd,void *arg);
+#endif
 
+extern int arcmsr_release(struct Scsi_Host *);
+extern int arcmsr_queue_command(Scsi_Cmnd *cmd,void (* done)(Scsi_Cmnd *));
+extern int arcmsr_cmd_abort(Scsi_Cmnd *);
+extern int arcmsr_bus_reset(Scsi_Cmnd *);
+extern const char *arcmsr_info(struct Scsi_Host *);
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+	static Scsi_Host_Template arcmsr_scsi_host_template = {
+		    .module                 = THIS_MODULE,
+			.proc_name	            = "arcmsr",
+    		.proc_info	            = arcmsr_proc_info,
+    		.name		            = "ARCMSR(ARC1110/1120/1130/1160/1210/1220/1230/1260) SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
+    		.release	            = arcmsr_release,
+			.info                   = arcmsr_info,
+    		.queuecommand	        = arcmsr_queue_command,
+			.eh_strategy_handler    = NULL,	
+			.eh_abort_handler       = arcmsr_cmd_abort,
+			.eh_device_reset_handler= NULL,	
+			.eh_bus_reset_handler   = arcmsr_bus_reset,
+			.eh_host_reset_handler  = NULL,	
+     		.bios_param	            = arcmsr_bios_param,	
+    		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
+    		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
+    		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
+			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
+    		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
+     		.unchecked_isa_dma      = 0,
+    		.use_clustering	        = DISABLE_CLUSTERING,
+	};
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,3,30)
+	extern int arcmsr_detect(Scsi_Host_Template *);
+	extern int arcmsr_ioctl(Scsi_Device *dev,int ioctl_cmd,void *arg);
+	extern int arcmsr_schedule_command(PSCSICMD pcmd);
+	static Scsi_Host_Template driver_template = {
+			.proc_name	            = "arcmsr",
+    		.proc_info	            = arcmsr_proc_info,
+    		.name		            = "ARCMSR(ARC1110/1120/1130/1160/1210/1220/1230/1260) SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */
+    		.detect		            = arcmsr_detect,
+    		.release	            = arcmsr_release,
+			.info                   = arcmsr_info,
+			.ioctl                  = arcmsr_ioctl,
+			.command                = arcmsr_schedule_command,
+    		.queuecommand	        = arcmsr_queue_command,
+			.eh_strategy_handler    = NULL,	
+			.eh_abort_handler       = arcmsr_cmd_abort,
+			.eh_device_reset_handler= NULL,	
+			.eh_bus_reset_handler   = arcmsr_bus_reset,
+			.eh_host_reset_handler  = NULL,	
+     		.bios_param	            = arcmsr_bios_param,	
+    		.can_queue	            = ARCMSR_MAX_OUTSTANDING_CMD,
+    		.this_id	            = ARCMSR_SCSI_INITIATOR_ID,
+    		.sg_tablesize	        = ARCMSR_MAX_SG_ENTRIES, 
+			.max_sectors    	    = ARCMSR_MAX_XFER_SECTORS, 
+    		.cmd_per_lun	        = ARCMSR_MAX_CMD_PERLUN,	
+     		.unchecked_isa_dma      = 0,
+    		.use_clustering	        = DISABLE_CLUSTERING,
+		};
+		#include "/usr/src/linux/drivers/scsi/scsi_module.c"
+#else /* KERNEL_VERSION(2,2,xx) */
+    extern int arcmsr_detect(Scsi_Host_Template *);
+    extern int arcmsr_ioctl(Scsi_Device *dev,int ioctl_cmd,void *arg);
+    extern int arcmsr_schedule_command(PSCSICMD pcmd);
+	#define ARCMSR	{						        \
+		proc_dir:                     NULL,			\
+		proc_info:                    arcmsr_proc_info,			\
+		name:                         "ARCMSR(ARC1110/1120/1130/1160/1210/1220/1230/1260) SATA RAID HOST Adapter" ARCMSR_DRIVER_VERSION,  /* *name */ \
+		detect:                       arcmsr_detect,					\
+		release:                      arcmsr_release,				\
+		info:                         arcmsr_info,					\
+        ioctl:                        arcmsr_ioctl,                 \
+		command:                      arcmsr_schedule_command,						\
+		queuecommand:                 arcmsr_queue_command,				\
+		eh_strategy_handler:          NULL,				\
+		eh_abort_handler:             arcmsr_cmd_abort,					\
+		eh_device_reset_handler:      NULL,				\
+		eh_bus_reset_handler:         arcmsr_bus_reset,				\
+		eh_host_reset_handler:        NULL,				\
+		abort:                        NULL,					\
+		reset:                        NULL,					\
+		slave_attach:                 NULL,					\
+		bios_param:                   arcmsr_bios_param,				\
+		can_queue:                    ARCMSR_MAX_OUTSTANDING_CMD,\
+		this_id:                      ARCMSR_SCSI_INITIATOR_ID,		\
+		sg_tablesize:                 ARCMSR_MAX_SG_ENTRIES,	\
+		cmd_per_lun:                  ARCMSR_MAX_CMD_PERLUN,		\
+		use_new_eh_code:              1,				\
+		unchecked_isa_dma:            0,	\
+		use_clustering:               DISABLE_CLUSTERING	\
+	}
+	#ifdef MODULE
+		/* Eventually this will go into an include file, but this will be later */
+		Scsi_Host_Template driver_template = ARCMSR;
+		#include "scsi_module.c"
+	#endif
+#endif
